@@ -131,7 +131,7 @@ export default function LoginPage() {
                 認証コードを入力してください
               </h3>
               <p className="text-[11px] leading-relaxed" style={{ color: "var(--muted)" }}>
-                入力されたメールアドレス（<span className="font-semibold" style={{ color: "var(--foreground)" }}>{email}</span>）宛に、6桁の認証コードを送信しました。メールに記載の数字を入力してください。
+                入力されたメールアドレス（<span className="font-semibold" style={{ color: "var(--foreground)" }}>{email}</span>）宛に、8桁の認証コードを送信しました。メールに記載の英数字を入力してください。
               </p>
             </div>
 
@@ -141,19 +141,18 @@ export default function LoginPage() {
                 className="block text-xs font-semibold tracking-wider uppercase"
                 style={{ color: "var(--muted)" }}
               >
-                6桁の認証コード
+                8桁の認証コード
               </label>
               <input
                 id="code"
                 type="text"
                 required
-                pattern="\d{6}"
-                maxLength={6}
-                placeholder="123456"
+                maxLength={8}
+                placeholder="a1b2c3d4"
                 value={code}
-                onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                onChange={(e) => setCode(e.target.value)}
                 disabled={isLoading}
-                className="w-full px-4 py-3 rounded-xl text-center tracking-[6px] text-lg font-bold outline-none transition-all duration-200"
+                className="w-full px-4 py-3 rounded-xl text-center tracking-[4px] text-lg font-bold outline-none transition-all duration-200"
                 style={{
                   background: "var(--background)",
                   border: "1px solid var(--border)",
@@ -172,12 +171,12 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              disabled={isLoading || code.length !== 6}
+              disabled={isLoading || code.length < 6}
               className="w-full py-3.5 rounded-xl text-sm font-semibold text-white transition-all duration-300 flex items-center justify-center gap-2 mt-4 hover:shadow-sm cursor-pointer"
               style={{
                 background: "var(--accent)",
-                opacity: isLoading || code.length !== 6 ? 0.6 : 1,
-                cursor: isLoading || code.length !== 6 ? "not-allowed" : "pointer",
+                opacity: isLoading || code.length < 6 ? 0.6 : 1,
+                cursor: isLoading || code.length < 6 ? "not-allowed" : "pointer",
               }}
             >
               {isLoading ? (
