@@ -32,10 +32,7 @@ interface ProfileFormProps {
 }
 
 const OCCUPATION_OPTIONS = ["フルタイム", "パート", "育休中", "専業"];
-const SCHOOL_OPTIONS = ["保育園", "幼稚園", "なし"];
 
-const INTEREST_PRESETS = ["電車", "工作", "恐竜", "絵本", "おままごと", "ブロック", "歌・ダンス", "動物"];
-const CONCERN_PRESETS = ["癇癪", "偏食", "睡眠", "発達不安", "お友達関係", "トイレトレーニング", "赤ちゃん返り"];
 
 export default function ProfileForm({ initialProfile, initialMembers }: ProfileFormProps) {
   const [familySummary, setFamilySummary] = useState(initialProfile.family_summary || "");
@@ -99,7 +96,6 @@ export default function ProfileForm({ initialProfile, initialMembers }: ProfileF
       role: "child",
       nickname: `子ども ${members.filter((m) => m.role === "child").length + 1}`,
       birthdate: "",
-      school_status: "保育園",
       interests: [],
       concerns: [],
     };
@@ -118,23 +114,6 @@ export default function ProfileForm({ initialProfile, initialMembers }: ProfileF
     );
   };
 
-  // Toggle interest tags
-  const toggleInterest = (index: number, interest: string) => {
-    const member = members[index];
-    const newInterests = member.interests.includes(interest)
-      ? member.interests.filter((i) => i !== interest)
-      : [...member.interests, interest];
-    updateMember(index, { interests: newInterests });
-  };
-
-  // Toggle concern tags
-  const toggleConcern = (index: number, concern: string) => {
-    const member = members[index];
-    const newConcerns = member.concerns.includes(concern)
-      ? member.concerns.filter((c) => c !== concern)
-      : [...member.concerns, concern];
-    updateMember(index, { concerns: newConcerns });
-  };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -490,85 +469,52 @@ export default function ProfileForm({ initialProfile, initialMembers }: ProfileF
                     ) : (
                       /* Child Specific UI */
                       <div className="space-y-4 pt-1 border-t" style={{ borderColor: "var(--border)" }}>
-                        {/* School Status check option */}
-                        <div className="space-y-1.5">
+                        {/* Child Interests Free Input */}
+                        <div className="space-y-1">
                           <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                            通園・通学有無
+                            好きなこと・興味 (カンマ区切りで複数入力可)
                           </label>
-                          <div className="flex gap-2 pt-0.5">
-                            {SCHOOL_OPTIONS.map((opt) => (
-                              <button
-                                key={opt}
-                                type="button"
-                                onClick={() => updateMember(index, { school_status: opt })}
-                                disabled={isLoading}
-                                className="text-xs px-3.5 py-1.5 rounded-full border transition-all duration-200 cursor-pointer font-medium"
-                                style={{
-                                  background: member.school_status === opt ? "var(--accent)" : "var(--card)",
-                                  borderColor: member.school_status === opt ? "var(--accent)" : "var(--border)",
-                                  color: member.school_status === opt ? "#ffffff" : "var(--muted)",
-                                }}
-                              >
-                                {opt}
-                              </button>
-                            ))}
-                          </div>
+                          <input
+                            type="text"
+                            value={member.interests.join(", ")}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const interestsArr = val.split(/[,，]/).map(s => s.trim()).filter(Boolean);
+                              updateMember(index, { interests: interestsArr });
+                            }}
+                            disabled={isLoading}
+                            placeholder="例：電車, 工作, 恐竜, 絵本"
+                            className="w-full px-3.5 py-2 rounded-xl text-sm outline-none border"
+                            style={{
+                              background: "var(--background)",
+                              borderColor: "var(--border)",
+                              color: "var(--foreground)",
+                            }}
+                          />
                         </div>
 
-                        {/* Child Interests Tags */}
-                        <div className="space-y-1.5">
+                        {/* Child Concerns Free Input */}
+                        <div className="space-y-1">
                           <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                            好きなこと・興味 (複数選択可)
+                            気になること・悩み (カンマ区切りで複数入力可)
                           </label>
-                          <div className="flex flex-wrap gap-1.5">
-                            {INTEREST_PRESETS.map((tag) => {
-                              const isSelected = member.interests.includes(tag);
-                              return (
-                                <button
-                                  key={tag}
-                                  type="button"
-                                  onClick={() => toggleInterest(index, tag)}
-                                  disabled={isLoading}
-                                  className="text-[11px] px-2.5 py-1 rounded-lg border transition-all duration-200 cursor-pointer font-medium"
-                                  style={{
-                                    background: isSelected ? "var(--accent)" : "var(--card)",
-                                    borderColor: isSelected ? "var(--accent)" : "var(--border)",
-                                    color: isSelected ? "#ffffff" : "var(--muted)",
-                                  }}
-                                >
-                                  {tag}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        {/* Child Concerns Tags */}
-                        <div className="space-y-1.5">
-                          <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                            気になること・悩み (複数選択可)
-                          </label>
-                          <div className="flex flex-wrap gap-1.5">
-                            {CONCERN_PRESETS.map((tag) => {
-                              const isSelected = member.concerns.includes(tag);
-                              return (
-                                <button
-                                  key={tag}
-                                  type="button"
-                                  onClick={() => toggleConcern(index, tag)}
-                                  disabled={isLoading}
-                                  className="text-[11px] px-2.5 py-1 rounded-lg border transition-all duration-200 cursor-pointer font-medium"
-                                  style={{
-                                    background: isSelected ? "var(--accent)" : "var(--card)",
-                                    borderColor: isSelected ? "var(--accent)" : "var(--border)",
-                                    color: isSelected ? "#ffffff" : "var(--muted)",
-                                  }}
-                                >
-                                  {tag}
-                                </button>
-                              );
-                            })}
-                          </div>
+                          <input
+                            type="text"
+                            value={member.concerns.join(", ")}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const concernsArr = val.split(/[,，]/).map(s => s.trim()).filter(Boolean);
+                              updateMember(index, { concerns: concernsArr });
+                            }}
+                            disabled={isLoading}
+                            placeholder="例：癇癪, 偏食, 睡眠"
+                            className="w-full px-3.5 py-2 rounded-xl text-sm outline-none border"
+                            style={{
+                              background: "var(--background)",
+                              borderColor: "var(--border)",
+                              color: "var(--foreground)",
+                            }}
+                          />
                         </div>
                       </div>
                     )}

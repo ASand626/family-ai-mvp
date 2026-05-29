@@ -51,7 +51,6 @@ export function formatProfileForAI(profile: Profile | null | undefined, members:
       const label = child.nickname || `子ども ${index + 1}`;
       result += `- ${label} (子ども):\n`;
       if (age) result += `  * 年齢: ${age}\n`;
-      if (child.school_status) result += `  * 通園状況: ${child.school_status}\n`;
       if (child.interests && child.interests.length > 0) {
         result += `  * 好きなこと・興味: ${child.interests.join(', ')}\n`;
       }
