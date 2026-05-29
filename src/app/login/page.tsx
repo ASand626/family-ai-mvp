@@ -148,7 +148,6 @@ export default function LoginPage() {
                 type="text"
                 required
                 maxLength={8}
-                placeholder="a1b2c3d4"
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
                 disabled={isLoading}
