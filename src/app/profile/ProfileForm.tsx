@@ -472,7 +472,7 @@ export default function ProfileForm({ initialProfile, initialMembers }: ProfileF
                         {/* Child Interests Free Input */}
                         <div className="space-y-1">
                           <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                            好きなこと・興味 (カンマ区切りで複数入力可)
+                            好きなこと・興味 (自由入力)
                           </label>
                           <input
                             type="text"
@@ -483,7 +483,7 @@ export default function ProfileForm({ initialProfile, initialMembers }: ProfileF
                               updateMember(index, { interests: interestsArr });
                             }}
                             disabled={isLoading}
-                            placeholder="例：電車, 工作, 恐竜, 絵本"
+                            placeholder="例：電車やお絵描き、歌やダンスなど"
                             className="w-full px-3.5 py-2 rounded-xl text-sm outline-none border"
                             style={{
                               background: "var(--background)",
@@ -496,7 +496,7 @@ export default function ProfileForm({ initialProfile, initialMembers }: ProfileF
                         {/* Child Concerns Free Input */}
                         <div className="space-y-1">
                           <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                            気になること・悩み (カンマ区切りで複数入力可)
+                            気になること・悩み (自由入力)
                           </label>
                           <input
                             type="text"
@@ -507,7 +507,7 @@ export default function ProfileForm({ initialProfile, initialMembers }: ProfileF
                               updateMember(index, { concerns: concernsArr });
                             }}
                             disabled={isLoading}
-                            placeholder="例：癇癪, 偏食, 睡眠"
+                            placeholder="例：偏食やかんしゃく、お友達関係など"
                             className="w-full px-3.5 py-2 rounded-xl text-sm outline-none border"
                             style={{
                               background: "var(--background)",
