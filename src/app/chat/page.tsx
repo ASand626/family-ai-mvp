@@ -2,7 +2,11 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import ChatInterface from "./ChatInterface";
 
-export default async function ChatPage() {
+interface PageProps {
+  searchParams: Promise<{ session_id?: string }>;
+}
+
+export default async function ChatPage({ searchParams }: PageProps) {
   const supabase = await createClient();
 
   // 1. Secure route: Check authorization on the server
@@ -14,23 +18,56 @@ export default async function ChatPage() {
     redirect("/login");
   }
 
-  // 2. Fetch past conversation history from Supabase conversations table
-  const { data: rawHistory, error } = await supabase
-    .from("conversations")
-    .select("role, content, created_at")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: true }) // oldest first to render sequentially
-    .limit(50); // Fetch latest 50 messages to render initial viewport quickly
+  const resolvedSearchParams = await searchParams;
+  const activeSessionId = resolvedSearchParams.session_id;
 
-  if (error) {
-    console.error("Fetch conversation history error:", error);
+  // 2. Fetch all chat sessions for this user, sorted by updated_at descending (latest first)
+  const { data: rawSessions, error: sessionsError } = await supabase
+    .from("chat_sessions")
+    .select("id, title, created_at, updated_at")
+    .eq("user_id", user.id)
+    .order("updated_at", { ascending: false });
+
+  if (sessionsError) {
+    console.error("Fetch chat sessions error:", sessionsError);
   }
 
-  const history = (rawHistory || []).map((msg) => ({
-    role: msg.role as "user" | "assistant",
-    content: msg.content,
-    created_at: msg.created_at,
+  const sessions = (rawSessions || []).map((s) => ({
+    id: s.id,
+    title: s.title,
+    created_at: s.created_at,
+    updated_at: s.updated_at,
   }));
 
-  return <ChatInterface initialHistory={history} userEmail={user.email || ""} />;
+  // 3. Fetch past conversation history for the active session, if specified
+  let history: { role: "user" | "assistant"; content: string; created_at?: string }[] = [];
+
+  if (activeSessionId) {
+    const { data: rawHistory, error: historyError } = await supabase
+      .from("conversations")
+      .select("role, content, created_at")
+      .eq("user_id", user.id)
+      .eq("session_id", activeSessionId)
+      .order("created_at", { ascending: true }) // oldest first to render sequentially
+      .limit(50); // Fetch latest 50 messages to render initial viewport quickly
+
+    if (historyError) {
+      console.error("Fetch conversation history error:", historyError);
+    }
+
+    history = (rawHistory || []).map((msg) => ({
+      role: msg.role as "user" | "assistant",
+      content: msg.content,
+      created_at: msg.created_at,
+    }));
+  }
+
+  return (
+    <ChatInterface
+      initialHistory={history}
+      initialSessions={sessions}
+      activeSessionId={activeSessionId || null}
+      userEmail={user.email || ""}
+    />
+  );
 }
