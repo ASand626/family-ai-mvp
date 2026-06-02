@@ -159,7 +159,7 @@ export default function ProfileForm({ initialProfile, initialMembers }: ProfileF
         style={{ borderColor: "var(--border)", background: "var(--card)" }}
       >
         <Link href="/" className="text-lg font-semibold tracking-tight hover:opacity-85 transition-opacity" style={{ color: "var(--accent)" }}>
-          家族AI
+          Family Compass
         </Link>
         <div className="flex items-center gap-2 sm:gap-3">
           <Link
@@ -576,7 +576,7 @@ export default function ProfileForm({ initialProfile, initialMembers }: ProfileF
         className="px-6 py-6 text-center text-xs border-t"
         style={{ borderColor: "var(--border)", color: "var(--muted)" }}
       >
-        © 2025 家族AI
+        © 2025 Family Compass
       </footer>
     </div>
   );

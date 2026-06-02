@@ -8,7 +8,7 @@ const geist = Geist({
 });
 
 export const metadata: Metadata = {
-  title: "家族AI | 家庭の悩みを整理するAI伴走アプリ",
+  title: "Family Compass | 家庭の悩みを整理するAI伴走アプリ",
   description: "家庭内の複雑な問題を整理し、小さな改善を支援するAI伴走システム。",
 };
 

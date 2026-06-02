@@ -16,7 +16,7 @@ export default async function HomePage() {
         style={{ borderColor: "var(--border)", background: "var(--card)" }}
       >
         <Link href="/" className="text-lg font-semibold tracking-tight hover:opacity-85 transition-opacity" style={{ color: "var(--accent)" }}>
-          家族AI
+          Family Compass
         </Link>
 
         {user ? (
@@ -54,7 +54,7 @@ export default async function HomePage() {
         <div className="max-w-xl mx-auto space-y-8 animate-fade-in">
           <div className="space-y-4">
             <p className="text-xs font-medium tracking-widest uppercase" style={{ color: "var(--accent)" }}>
-              Family AI
+              Family Compass
             </p>
             <h1
               className="text-4xl font-semibold leading-snug tracking-tight"
@@ -155,7 +155,7 @@ export default async function HomePage() {
         className="px-6 py-6 text-center text-xs border-t"
         style={{ borderColor: "var(--border)", color: "var(--muted)" }}
       >
-        © 2025 家族AI
+        © 2025 Family Compass
       </footer>
     </div>
   );

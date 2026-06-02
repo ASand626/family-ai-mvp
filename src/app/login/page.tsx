@@ -89,7 +89,7 @@ export default function LoginPage() {
               className="text-xl font-semibold tracking-tight"
               style={{ color: "var(--accent)" }}
             >
-              家族AI
+              Family Compass
             </span>
           </Link>
           <p className="mt-2 text-sm" style={{ color: "var(--muted)" }}>

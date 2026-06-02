@@ -110,7 +110,7 @@ export default function ChatInterface({ initialHistory, userEmail }: ChatInterfa
       >
         <div className="flex items-center gap-3">
           <Link href="/" className="text-lg font-semibold tracking-tight hover:opacity-85 transition-opacity" style={{ color: "var(--accent)" }}>
-            家族AI
+            Family Compass
           </Link>
           <span className="text-xs px-2 py-0.5 rounded-full border hidden sm:inline" style={{ borderColor: "var(--border)", color: "var(--muted)", background: "var(--background)" }}>
             相談室
@@ -166,7 +166,7 @@ export default function ChatInterface({ initialHistory, userEmail }: ChatInterfa
               </div>
               <div className="space-y-2">
                 <h3 className="font-semibold text-lg" style={{ color: "var(--foreground)" }}>
-                  家族AI 相談室へようこそ
+                  Family Compass 相談室へようこそ
                 </h3>
                 <p className="text-sm leading-relaxed max-w-md mx-auto" style={{ color: "var(--muted)" }}>
                   日々の家事、育児、パートナーとのこと、仕事との両立など、
