@@ -158,10 +158,7 @@ export default function DailyMessageCard({ isAnonymous }: DailyMessageCardProps)
         {message}
       </p>
       
-      <div className="mt-4 pt-3 border-t flex justify-between items-center relative z-10" style={{ borderColor: 'rgba(240, 217, 220, 0.3)' }}>
-        <span className="text-[10px]" style={{ color: 'var(--muted)' }}>
-          ※相談履歴とご家族の情報から生成されました
-        </span>
+      <div className="mt-4 pt-3 border-t flex justify-end items-center relative z-10" style={{ borderColor: 'rgba(240, 217, 220, 0.3)' }}>
         <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--accent)' }}>
           Family Compass
         </span>
