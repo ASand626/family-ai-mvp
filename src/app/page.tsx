@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/server";
 import { signOut, signInAnonymouslyAction } from "./login/actions";
+import DailyMessageCard from "./DailyMessageCard";
 
 export default async function HomePage() {
   const supabase = await createClient();
@@ -69,15 +70,20 @@ export default async function HomePage() {
           </div>
 
           {user ? (
-            <div className="space-y-2">
-              <p className="text-sm font-semibold" style={{ color: "var(--accent)" }}>
-                おかえりなさい、{userDisplayName} さん。
-              </p>
-              <p className="text-base leading-relaxed" style={{ color: "var(--muted)" }}>
-                {isAnonymous
-                  ? "現在ゲストモードで利用中です。新しい相談を始めたり、これまでの記録を振り返ることができます。"
-                  : "前回お話しした内容を元に、新しい相談を始めたり、これまでの記録を振り返ることができます。"}
-              </p>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <p className="text-sm font-semibold" style={{ color: "var(--accent)" }}>
+                  おかえりなさい、{userDisplayName} さん。
+                </p>
+                <p className="text-base leading-relaxed" style={{ color: "var(--muted)" }}>
+                  {isAnonymous
+                    ? "現在ゲストモードで利用中です。新しい相談を始めたり、これまでの記録を振り返ることができます。"
+                    : "前回お話しした内容を元に、新しい相談を始めたり、これまでの記録を振り返ることができます。"}
+                </p>
+              </div>
+              <div className="pt-2">
+                <DailyMessageCard isAnonymous={isAnonymous} />
+              </div>
             </div>
           ) : (
             <p className="text-base leading-relaxed" style={{ color: "var(--muted)" }}>

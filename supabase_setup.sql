@@ -69,3 +69,34 @@ BEGIN
         WHERE user_id = u_id AND session_id IS NULL;
     END LOOP;
 END $$;
+
+-- =====================================================================
+-- 4. daily_messages テーブルの作成とRLS設定（日替わりメッセージ機能）
+-- =====================================================================
+CREATE TABLE IF NOT EXISTS public.daily_messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    message TEXT NOT NULL,
+    date DATE NOT NULL DEFAULT CURRENT_DATE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE(user_id, date)
+);
+
+-- RLS（Row Level Security）の有効化
+ALTER TABLE public.daily_messages ENABLE ROW LEVEL SECURITY;
+
+-- 自分が所有する日替わりメッセージのみ操作可能なポリシーを設定
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'daily_messages' AND policyname = 'Users can manage their own daily messages'
+    ) THEN
+        CREATE POLICY "Users can manage their own daily messages" 
+        ON public.daily_messages
+        FOR ALL 
+        TO authenticated
+        USING (auth.uid() = user_id)
+        WITH CHECK (auth.uid() = user_id);
+    END IF;
+END $$;
