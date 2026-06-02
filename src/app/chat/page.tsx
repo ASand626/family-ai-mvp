@@ -62,12 +62,16 @@ export default async function ChatPage({ searchParams }: PageProps) {
     }));
   }
 
+  const isAnonymous = user.is_anonymous || false;
+  const userEmail = isAnonymous ? "ゲストユーザー" : user.email || "";
+
   return (
     <ChatInterface
       initialHistory={history}
       initialSessions={sessions}
       activeSessionId={activeSessionId || null}
-      userEmail={user.email || ""}
+      userEmail={userEmail}
+      isAnonymous={isAnonymous}
     />
   );
 }

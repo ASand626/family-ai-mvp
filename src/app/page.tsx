@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/server";
-import { signOut } from "./login/actions";
+import { signOut, signInAnonymouslyAction } from "./login/actions";
 
 export default async function HomePage() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  const isAnonymous = user?.is_anonymous ?? false;
+  const userDisplayName = isAnonymous ? "ゲストユーザー" : user?.email || "";
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "var(--background)" }}>
@@ -22,7 +25,7 @@ export default async function HomePage() {
         {user ? (
           <div className="flex items-center gap-4">
             <span className="text-xs hidden sm:inline" style={{ color: "var(--muted)" }}>
-              {user.email}
+              {userDisplayName}
             </span>
             <form action={signOut}>
               <button
@@ -68,11 +71,12 @@ export default async function HomePage() {
           {user ? (
             <div className="space-y-2">
               <p className="text-sm font-semibold" style={{ color: "var(--accent)" }}>
-                おかえりなさい、{user.email} さん。
+                おかえりなさい、{userDisplayName} さん。
               </p>
               <p className="text-base leading-relaxed" style={{ color: "var(--muted)" }}>
-                前回お話しした内容を元に、新しい相談を始めたり、<br />
-                これまでの記録を振り返ることができます。
+                {isAnonymous
+                  ? "現在ゲストモードで利用中です。新しい相談を始めたり、これまでの記録を振り返ることができます。"
+                  : "前回お話しした内容を元に、新しい相談を始めたり、これまでの記録を振り返ることができます。"}
               </p>
             </div>
           ) : (
@@ -107,16 +111,18 @@ export default async function HomePage() {
               </>
             ) : (
               <>
+                <form action={signInAnonymouslyAction} className="w-full sm:w-auto">
+                  <button
+                    type="submit"
+                    className="w-full sm:w-auto px-8 py-3 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90 cursor-pointer shadow-sm"
+                    style={{ background: "var(--accent)" }}
+                  >
+                    はじめる（登録不要）
+                  </button>
+                </form>
                 <Link
                   href="/login"
-                  className="w-full sm:w-auto px-8 py-3 rounded-lg text-sm font-medium text-white transition-opacity hover:opacity-90"
-                  style={{ background: "var(--accent)" }}
-                >
-                  はじめる
-                </Link>
-                <Link
-                  href="/login"
-                  className="w-full sm:w-auto px-8 py-3 rounded-lg text-sm font-medium transition-colors hover:underline"
+                  className="w-full sm:w-auto px-8 py-3 rounded-lg text-sm font-medium transition-colors hover:underline text-center"
                   style={{ color: "var(--muted)" }}
                 >
                   ログインして続ける

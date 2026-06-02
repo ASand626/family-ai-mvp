@@ -23,6 +23,7 @@ interface ChatInterfaceProps {
   initialSessions: ChatSession[];
   activeSessionId: string | null;
   userEmail: string;
+  isAnonymous: boolean;
 }
 
 export default function ChatInterface({
@@ -30,6 +31,7 @@ export default function ChatInterface({
   initialSessions,
   activeSessionId,
   userEmail,
+  isAnonymous,
 }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>(initialHistory);
   const [sessions, setSessions] = useState<ChatSession[]>(initialSessions);
@@ -39,6 +41,70 @@ export default function ChatInterface({
   const [isDeletingSessionId, setIsDeletingSessionId] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [localIsAnonymous, setLocalIsAnonymous] = useState(isAnonymous);
+  const [localUserEmail, setLocalUserEmail] = useState(userEmail);
+  const [isPromoModalOpen, setIsPromoModalOpen] = useState(false);
+  const [promoEmail, setPromoEmail] = useState("");
+  const [promoCode, setPromoCode] = useState("");
+  const [promoStep, setPromoStep] = useState<"email" | "otp">("email");
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const [isPromoLoading, setIsPromoLoading] = useState(false);
+
+  const handleStartPromo = () => {
+    setPromoEmail("");
+    setPromoCode("");
+    setPromoStep("email");
+    setPromoError(null);
+    setIsPromoModalOpen(true);
+  };
+
+  const handleSendPromoEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!promoEmail.trim()) return;
+    setIsPromoLoading(true);
+    setPromoError(null);
+
+    try {
+      const { linkEmailToAnonymous } = await import("@/app/login/actions");
+      const res = await linkEmailToAnonymous(promoEmail);
+      if (res?.error) {
+        setPromoError(res.error);
+      } else {
+        setPromoStep("otp");
+      }
+    } catch (err) {
+      console.error(err);
+      setPromoError("接続エラーが発生しました。");
+    } finally {
+      setIsPromoLoading(false);
+    }
+  };
+
+  const handleVerifyPromoOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!promoEmail || !promoCode) return;
+    setIsPromoLoading(true);
+    setPromoError(null);
+
+    try {
+      const { verifyAndLinkOtp } = await import("@/app/login/actions");
+      const res = await verifyAndLinkOtp(promoEmail, promoCode);
+      if (res?.error) {
+        setPromoError(res.error);
+      } else {
+        setLocalIsAnonymous(false);
+        setLocalUserEmail(promoEmail);
+        setIsPromoModalOpen(false);
+        router.refresh();
+      }
+    } catch (err) {
+      console.error(err);
+      setPromoError("認証中にエラーが発生しました。");
+    } finally {
+      setIsPromoLoading(false);
+    }
+  };
 
   const router = useRouter();
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -361,7 +427,7 @@ export default function ChatInterface({
         <div className="p-4 border-t flex flex-col gap-2.5" style={{ borderColor: "var(--border)" }}>
           <div className="flex items-center justify-between">
             <span className="text-[10px] truncate max-w-[150px] font-medium" style={{ color: "var(--muted)" }}>
-              {userEmail}
+              {localUserEmail}
             </span>
             <button
               onClick={handleSignOut}
@@ -438,6 +504,32 @@ export default function ChatInterface({
             </Link>
           </div>
         </header>
+
+        {/* Guest Warning Banner */}
+        {localIsAnonymous && (
+          <div
+            className="px-6 py-3 border-b flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 animate-fade-in text-xs font-medium shrink-0"
+            style={{
+              background: "var(--accent-light)",
+              borderColor: "var(--border)",
+              color: "var(--accent)",
+            }}
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-base shrink-0">⚠️</span>
+              <span>
+                <strong>ゲストモードで利用中です。</strong> ブラウザの履歴クリアやシークレットモードでは相談履歴が消去されます。
+              </span>
+            </div>
+            <button
+              onClick={handleStartPromo}
+              className="self-start sm:self-auto px-3.5 py-1.5 rounded-lg text-white font-semibold shadow-sm transition-all hover:opacity-90 active:scale-[0.98] cursor-pointer text-center whitespace-nowrap"
+              style={{ background: "var(--accent)" }}
+            >
+              メールアドレスを登録してデータを保存する
+            </button>
+          </div>
+        )}
 
         {/* Chat Feed */}
         <main className="flex-1 overflow-y-auto px-6 py-8 space-y-6">
@@ -635,6 +727,208 @@ export default function ChatInterface({
           </form>
         </footer>
       </div>
+
+      {/* Promotion (Email Linking) Modal */}
+      {isPromoModalOpen && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div
+            className="w-full max-w-md rounded-2xl p-6 shadow-xl border animate-scale-up"
+            style={{
+              background: "var(--card)",
+              borderColor: "var(--border)",
+            }}
+          >
+            {/* Modal Header */}
+            <div className="flex justify-between items-center mb-5">
+              <h3 className="text-base font-semibold" style={{ color: "var(--foreground)" }}>
+                相談データを保存する
+              </h3>
+              <button
+                onClick={() => setIsPromoModalOpen(false)}
+                className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+                style={{ color: "var(--muted)" }}
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {promoStep === "email" ? (
+              /* Step 1: Input Email */
+              <form onSubmit={handleSendPromoEmail} className="space-y-4">
+                <p className="text-xs leading-relaxed" style={{ color: "var(--muted)" }}>
+                  現在の相談履歴（プロフィールやこれまでの会話）を引き継いだまま、メールアドレスと紐づけます。次回以降、同じメールアドレスでログインすれば、いつでもどこからでも履歴の続きから再開できます。
+                </p>
+
+                {promoError && (
+                  <div
+                    className="p-3.5 rounded-xl text-xs border flex items-start gap-2"
+                    style={{
+                      background: "#FFF0F1",
+                      borderColor: "#FAD4D6",
+                      color: "#E15256",
+                    }}
+                  >
+                    <span className="font-semibold">{promoError}</span>
+                  </div>
+                )}
+
+                <div className="space-y-1.5">
+                  <label
+                    htmlFor="promo-email"
+                    className="block text-[11px] font-semibold tracking-wider uppercase"
+                    style={{ color: "var(--muted)" }}
+                  >
+                    メールアドレス
+                  </label>
+                  <input
+                    id="promo-email"
+                    type="email"
+                    required
+                    placeholder="example@email.com"
+                    value={promoEmail}
+                    onChange={(e) => setPromoEmail(e.target.value)}
+                    disabled={isPromoLoading}
+                    className="w-full px-4 py-2.5 rounded-xl text-sm outline-none transition-all duration-200"
+                    style={{
+                      background: "var(--background)",
+                      border: "1px solid var(--border)",
+                      color: "var(--foreground)",
+                    }}
+                    onFocus={(e) => {
+                      e.currentTarget.style.borderColor = "var(--accent)";
+                      e.currentTarget.style.boxShadow = "0 0 0 3px var(--accent-light)";
+                    }}
+                    onBlur={(e) => {
+                      e.currentTarget.style.borderColor = "var(--border)";
+                      e.currentTarget.style.boxShadow = "none";
+                    }}
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsPromoModalOpen(false)}
+                    className="flex-1 py-2.5 rounded-xl text-xs font-semibold border transition-colors cursor-pointer"
+                    style={{
+                      color: "var(--muted)",
+                      borderColor: "var(--border)",
+                      background: "var(--card)",
+                    }}
+                  >
+                    キャンセル
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isPromoLoading || !promoEmail}
+                    className="flex-1 py-2.5 rounded-xl text-xs font-semibold text-white transition-all duration-300 flex items-center justify-center gap-1.5 cursor-pointer"
+                    style={{
+                      background: "var(--accent)",
+                      opacity: isPromoLoading || !promoEmail ? 0.6 : 1,
+                    }}
+                  >
+                    {isPromoLoading ? (
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      "認証メールを送信"
+                    )}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              /* Step 2: Input Verification Code */
+              <form onSubmit={handleVerifyPromoOtp} className="space-y-4 animate-fade-in">
+                <p className="text-xs leading-relaxed" style={{ color: "var(--muted)" }}>
+                  入力されたメールアドレス（<span className="font-semibold" style={{ color: "var(--foreground)" }}>{promoEmail}</span>）宛に、認証コードを送信しました。メールに記載の認証コードを入力してください。
+                </p>
+
+                {promoError && (
+                  <div
+                    className="p-3.5 rounded-xl text-xs border flex items-start gap-2"
+                    style={{
+                      background: "#FFF0F1",
+                      borderColor: "#FAD4D6",
+                      color: "#E15256",
+                    }}
+                  >
+                    <span className="font-semibold">{promoError}</span>
+                  </div>
+                )}
+
+                <div className="space-y-1.5 text-center">
+                  <label
+                    htmlFor="promo-code"
+                    className="block text-[11px] font-semibold tracking-wider uppercase text-left"
+                    style={{ color: "var(--muted)" }}
+                  >
+                    認証コード
+                  </label>
+                  <input
+                    id="promo-code"
+                    type="text"
+                    required
+                    maxLength={8}
+                    placeholder="8桁のコード"
+                    value={promoCode}
+                    onChange={(e) => setPromoCode(e.target.value)}
+                    disabled={isPromoLoading}
+                    className="w-full px-4 py-3 rounded-xl text-center tracking-[4px] text-lg font-bold outline-none transition-all duration-200"
+                    style={{
+                      background: "var(--background)",
+                      border: "1px solid var(--border)",
+                      color: "var(--foreground)",
+                    }}
+                    onFocus={(e) => {
+                      e.currentTarget.style.borderColor = "var(--accent)";
+                      e.currentTarget.style.boxShadow = "0 0 0 3px var(--accent-light)";
+                    }}
+                    onBlur={(e) => {
+                      e.currentTarget.style.borderColor = "var(--border)";
+                      e.currentTarget.style.boxShadow = "none";
+                    }}
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPromoStep("email");
+                      setPromoCode("");
+                      setPromoError(null);
+                    }}
+                    className="flex-1 py-2.5 rounded-xl text-xs font-semibold border transition-colors cursor-pointer"
+                    style={{
+                      color: "var(--muted)",
+                      borderColor: "var(--border)",
+                      background: "var(--card)",
+                    }}
+                  >
+                    メールを変更
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isPromoLoading || promoCode.length < 6}
+                    className="flex-1 py-2.5 rounded-xl text-xs font-semibold text-white transition-all duration-300 flex items-center justify-center gap-1.5 cursor-pointer"
+                    style={{
+                      background: "var(--accent)",
+                      opacity: isPromoLoading || promoCode.length < 6 ? 0.6 : 1,
+                    }}
+                  >
+                    {isPromoLoading ? (
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      "認証して登録"
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

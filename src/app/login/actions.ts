@@ -62,3 +62,69 @@ export async function signOut() {
   redirect('/')
 }
 
+export async function signInAnonymouslyAction() {
+  const supabase = await createClient()
+  const { error } = await supabase.auth.signInAnonymously()
+  
+  if (error) {
+    console.error('Anonymous sign-in error:', error)
+    redirect('/login?error=guest_failed')
+  }
+
+  redirect('/chat')
+}
+
+export async function linkEmailToAnonymous(email: string) {
+  if (!email) {
+    return { error: 'メールアドレスを入力してください。' }
+  }
+
+  const supabase = await createClient()
+  
+  // Try to update the user with the new email.
+  // This triggers email confirmation flow.
+  const { error } = await supabase.auth.updateUser({
+    email,
+  })
+
+  if (error) {
+    console.error('Link email error:', error)
+    return { error: error.message || '認証メールの送信に失敗しました。' }
+  }
+
+  return { success: true }
+}
+
+export async function verifyAndLinkOtp(email: string, token: string) {
+  if (!email || !token) {
+    return { error: 'メールアドレスと認証コードを入力してください。' }
+  }
+
+  const supabase = await createClient()
+
+  // First try verifyOtp with type 'signup' (linking style)
+  let result = await supabase.auth.verifyOtp({
+    email,
+    token,
+    type: 'signup',
+  })
+
+  // Fallback to 'email_change'
+  if (result.error) {
+    console.warn("verifyOtp with type 'signup' failed, trying 'email_change':", result.error.message)
+    result = await supabase.auth.verifyOtp({
+      email,
+      token,
+      type: 'email_change',
+    })
+  }
+
+  if (result.error) {
+    console.error('Promotion OTP Verification error:', result.error)
+    return { error: '認証コードが正しくないか、有効期限が切れています。' }
+  }
+
+  return { success: true }
+}
+
+
