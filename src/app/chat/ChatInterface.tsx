@@ -453,6 +453,14 @@ export default function ChatInterface({
               プロフィール
             </Link>
           </div>
+          <div className="flex justify-center gap-3.5 text-[10px] font-medium pt-1" style={{ color: "var(--muted)" }}>
+            <Link href="/terms" className="hover:underline" target="_blank">
+              利用規約
+            </Link>
+            <Link href="/privacy" className="hover:underline" target="_blank">
+              プライバシーポリシー
+            </Link>
+          </div>
         </div>
       </aside>
 
@@ -760,6 +768,12 @@ export default function ChatInterface({
                 <p className="text-xs leading-relaxed" style={{ color: "var(--muted)" }}>
                   現在の相談履歴（プロフィールやこれまでの会話）を引き継いだまま、メールアドレスと紐づけます。次回以降、同じメールアドレスでログインすれば、いつでもどこからでも履歴の続きから再開できます。
                 </p>
+
+                <div className="p-3 rounded-xl border leading-relaxed text-[11px]" style={{ borderColor: "var(--border)", background: "var(--background)", color: "var(--muted)" }}>
+                  🔒 <strong>プライバシー保護</strong>
+                  <br />
+                  登録されたデータは暗号化され、AIのモデル学習には利用されません。詳細は<Link href="/privacy" className="underline hover:opacity-85 mx-0.5" target="_blank">プライバシーポリシー</Link>をご確認ください。
+                </div>
 
                 {promoError && (
                   <div

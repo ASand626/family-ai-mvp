@@ -130,6 +130,16 @@ export default async function HomePage() {
               </>
             )}
           </div>
+
+          {!user && (
+            <p className="text-[11px] max-w-sm mx-auto leading-relaxed" style={{ color: "var(--muted)" }}>
+              🔒 <strong>安心してお話しいただくために</strong>
+              <br />
+              送信されたデータは暗号化され、AIモデルの再学習には一切利用されません。ゲスト利用の段階ではメールアドレスの登録も不要です。詳細は
+              <Link href="/privacy" className="underline hover:opacity-80 mx-1">プライバシーポリシー</Link>
+              をご確認ください。
+            </p>
+          )}
         </div>
       </main>
 
@@ -158,10 +168,20 @@ export default async function HomePage() {
 
       {/* Footer */}
       <footer
-        className="px-6 py-6 text-center text-xs border-t"
-        style={{ borderColor: "var(--border)", color: "var(--muted)" }}
+        className="px-6 py-6 border-t"
+        style={{ borderColor: "var(--border)" }}
       >
-        © 2025 Family Compass
+        <div className="max-w-2xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-xs" style={{ color: "var(--muted)" }}>
+          <span>© 2025 Family Compass</span>
+          <div className="flex gap-4">
+            <Link href="/terms" className="hover:underline">
+              利用規約
+            </Link>
+            <Link href="/privacy" className="hover:underline">
+              プライバシーポリシー
+            </Link>
+          </div>
+        </div>
       </footer>
     </div>
   );

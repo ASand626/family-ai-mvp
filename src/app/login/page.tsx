@@ -11,6 +11,7 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSent, setIsSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [agreed, setAgreed] = useState(false);
 
   const router = useRouter();
 
@@ -272,14 +273,31 @@ export default function LoginPage() {
               />
             </div>
 
+            <div className="flex items-start gap-2 text-xs py-1">
+              <input
+                id="agree"
+                type="checkbox"
+                checked={agreed}
+                onChange={(e) => setAgreed(e.target.checked)}
+                disabled={isLoading}
+                className="mt-0.5 rounded border-gray-300 accent-[var(--accent)] cursor-pointer"
+              />
+              <label htmlFor="agree" style={{ color: "var(--muted)" }} className="leading-normal cursor-pointer select-none">
+                <Link href="/terms" className="underline hover:opacity-85 font-medium" target="_blank">利用規約</Link>
+                および
+                <Link href="/privacy" className="underline hover:opacity-85 font-medium" target="_blank">プライバシーポリシー</Link>
+                に同意する
+              </label>
+            </div>
+
             <button
               type="submit"
-              disabled={isLoading || !email}
+              disabled={isLoading || !email || !agreed}
               className="w-full py-3.5 rounded-xl text-sm font-semibold text-white transition-all duration-300 flex items-center justify-center gap-2 mt-4 hover:shadow-sm"
               style={{
                 background: "var(--accent)",
-                opacity: isLoading || !email ? 0.6 : 1,
-                cursor: isLoading || !email ? "not-allowed" : "pointer",
+                opacity: isLoading || !email || !agreed ? 0.6 : 1,
+                cursor: isLoading || !email || !agreed ? "not-allowed" : "pointer",
               }}
             >
               {isLoading ? (
@@ -312,9 +330,20 @@ export default function LoginPage() {
         </div>
 
         {/* Info Text */}
-        <p className="text-center text-xs leading-relaxed" style={{ color: "var(--muted)" }}>
-          パスワードは不要です。登録されたメールアドレス宛に届く6桁の認証コードを画面に入力するだけで、安全にログイン・新規登録が完了します。
-        </p>
+        <div className="space-y-3 mt-6 text-xs leading-relaxed text-center" style={{ color: "var(--muted)" }}>
+          <p>
+            パスワードは不要です。登録されたメールアドレス宛に届く6桁の認証コードを画面に入力するだけで、安全にログイン・新規登録が完了します。
+          </p>
+          <p>
+            🔒 <strong>プライバシー保護</strong>
+            <br />
+            相談データは暗号化され、AIのモデル学習には再利用されません。安心して本音をお話しください。
+          </p>
+          <div className="flex justify-center gap-4 text-[10px] pt-1">
+            <Link href="/terms" className="hover:underline">利用規約</Link>
+            <Link href="/privacy" className="hover:underline">プライバシーポリシー</Link>
+          </div>
+        </div>
       </div>
 
       {/* Back link */}
