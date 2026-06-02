@@ -26,6 +26,82 @@ interface ChatInterfaceProps {
   isAnonymous: boolean;
 }
 
+function AssistantAvatar() {
+  return (
+    <div
+      className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 border shadow-sm animate-fade-in"
+      style={{ background: "var(--accent-light)", borderColor: "var(--border)" }}
+      title="Family Compass 伴走パートナー"
+    >
+      <svg
+        className="w-4.5 h-4.5"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <circle cx="12" cy="12" r="10" style={{ stroke: "var(--accent)" }} />
+        <polygon
+          points="16.24,7.76 14.12,14.12 7.76,16.24 9.88,9.88"
+          style={{ fill: "var(--accent)", stroke: "var(--accent)" }}
+        />
+      </svg>
+    </div>
+  );
+}
+
+function parseInlineStyles(text: string) {
+  if (!text) return "";
+  const parts = text.split(/(\*\*.*?\*\*)/g);
+  return parts.map((part, idx) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return (
+        <strong key={idx} className="font-bold">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    return part;
+  });
+}
+
+function renderMessageContent(content: string, role: "user" | "assistant") {
+  const lines = content.split("\n");
+  const isUser = role === "user";
+  
+  return (
+    <div className="space-y-1">
+      {lines.map((line, index) => {
+        const headerMatch = line.match(/^(#{1,6})\s+(.*)$/);
+        
+        if (headerMatch) {
+          const level = headerMatch[1].length;
+          const text = headerMatch[2];
+          const sizeClass = level === 1 ? "text-base" : level === 2 ? "text-[15px]" : "text-sm";
+          return (
+            <div
+              key={index}
+              className={`font-bold mt-3 mb-1.5 first:mt-0 flex items-center gap-1.5 ${sizeClass}`}
+              style={{ color: isUser ? "inherit" : "var(--accent)" }}
+            >
+              <span className="text-xs">◆</span>
+              <span>{parseInlineStyles(text)}</span>
+            </div>
+          );
+        }
+
+        return (
+          <div key={index} className="min-h-[1.5rem] break-words">
+            {parseInlineStyles(line)}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function ChatInterface({
   initialHistory,
   initialSessions,
@@ -591,12 +667,7 @@ export default function ChatInterface({
                 >
                   {/* AI Avatar */}
                   {msg.role === "assistant" && (
-                    <div
-                      className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs border font-semibold shadow-sm"
-                      style={{ background: "var(--accent-light)", borderColor: "var(--border)", color: "var(--accent)" }}
-                    >
-                      AI
-                    </div>
+                    <AssistantAvatar />
                   )}
 
                   {/* Message Bubble */}
@@ -612,9 +683,9 @@ export default function ChatInterface({
                       color: msg.role === "user" ? "#ffffff" : "var(--foreground)",
                     }}
                   >
-                    <p className="text-sm leading-relaxed whitespace-pre-wrap font-medium">
-                      {msg.content}
-                    </p>
+                    <div className="text-sm leading-relaxed font-medium">
+                      {renderMessageContent(msg.content, msg.role)}
+                    </div>
                   </div>
                 </div>
               ))
@@ -623,12 +694,7 @@ export default function ChatInterface({
             {/* AI is thinking/typing indicator */}
             {isLoading && (
               <div className="flex gap-3.5 justify-start animate-pulse">
-                <div
-                  className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-xs border font-semibold"
-                  style={{ background: "var(--accent-light)", borderColor: "var(--border)", color: "var(--accent)" }}
-                >
-                  AI
-                </div>
+                <AssistantAvatar />
                 <div
                   className="rounded-2xl rounded-tl-none px-5 py-3.5 border shadow-sm flex items-center gap-1.5"
                   style={{ background: "var(--card)", borderColor: "var(--border)" }}
