@@ -122,6 +122,7 @@ export async function saveFamilyMembers(members: any[]) {
       id: m.id || crypto.randomUUID(), // Generate UUIDv4 for new members to avoid null constraint errors
       user_id: user.id,
       role: m.role,
+      relationship: m.relationship || null,
       nickname: m.nickname || '',
       birthdate: m.birthdate || null,
       occupation: m.occupation || null,

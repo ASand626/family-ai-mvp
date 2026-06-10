@@ -7,6 +7,7 @@ interface Profile {
 
 interface FamilyMember {
   role: string;
+  relationship?: string | null;
   nickname: string;
   birthdate?: string | null;
   occupation?: string | null;
@@ -33,12 +34,13 @@ export function formatProfileForAI(profile: Profile | null | undefined, members:
   if (members && members.length > 0) {
     result += "\n家族メンバーの詳細:\n";
     
-    // Format Parents information
+    // Format adult members (the user themselves, partner, grandparents, etc.)
     const parents = members.filter(m => m.role === 'parent');
     parents.forEach((parent, index) => {
       const age = calculateAge(parent.birthdate);
-      const label = parent.nickname || `親 ${index + 1}`;
-      result += `- ${label} (親):\n`;
+      const label = parent.nickname || `家族メンバー ${index + 1}`;
+      const relationship = parent.relationship === '本人' ? '本人（相談者）' : (parent.relationship || '親');
+      result += `- ${label} (${relationship}):\n`;
       if (age) result += `  * 年齢: ${age}\n`;
       if (parent.occupation) result += `  * 勤務状況: ${parent.occupation}\n`;
       if (parent.recent_concern) result += `  * 最近の困りごと: ${parent.recent_concern}\n`;

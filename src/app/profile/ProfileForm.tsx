@@ -15,6 +15,7 @@ interface Profile {
 interface FamilyMember {
   id?: string;
   role: "parent" | "child";
+  relationship?: string;
   nickname: string;
   birthdate: string;
   // Parent
@@ -31,7 +32,20 @@ interface ProfileFormProps {
   initialMembers: any[];
 }
 
-const OCCUPATION_OPTIONS = ["フルタイム", "パート", "育休中", "専業"];
+const RELATIONSHIP_OPTIONS = ["本人", "子", "パートナー", "祖父", "祖母", "その他"];
+const OCCUPATION_OPTIONS = ["フルタイム", "時短", "パート", "専業主婦/主夫", "育休中", "その他"];
+
+// Returns the pulldown selection for a stored value: preset values map to themselves,
+// any free text maps to "その他".
+const toSelectValue = (value: string | undefined, options: string[]) => {
+  if (!value) return "";
+  return options.includes(value) ? value : "その他";
+};
+
+const toOtherText = (value: string | undefined, options: string[]) => {
+  if (!value || options.includes(value)) return "";
+  return value;
+};
 
 
 export default function ProfileForm({ initialProfile, initialMembers }: ProfileFormProps) {
@@ -44,6 +58,7 @@ export default function ProfileForm({ initialProfile, initialMembers }: ProfileF
       return [
         {
           role: "parent",
+          relationship: "本人",
           nickname: "ママ",
           birthdate: "",
           occupation: "育休中",
@@ -56,6 +71,7 @@ export default function ProfileForm({ initialProfile, initialMembers }: ProfileF
     return initialMembers.map((m) => ({
       id: m.id,
       role: m.role as "parent" | "child",
+      relationship: m.relationship || (m.role === "parent" ? "本人" : "子"),
       nickname: m.nickname || "",
       birthdate: m.birthdate || "",
       occupation: m.occupation || "",
@@ -90,19 +106,20 @@ export default function ProfileForm({ initialProfile, initialMembers }: ProfileF
     }
   };
 
-  // Add child helper
-  const addChild = () => {
-    const newChild: FamilyMember = {
+  // Add family member helper
+  const addMember = () => {
+    const newMember: FamilyMember = {
       role: "child",
-      nickname: `子ども ${members.filter((m) => m.role === "child").length + 1}`,
+      relationship: "子",
+      nickname: "",
       birthdate: "",
       interests: [],
       concerns: [],
     };
-    setMessages((prev) => [...prev, newChild]);
+    setMessages((prev) => [...prev, newMember]);
   };
 
-  // Remove member helper (for children only)
+  // Remove member helper
   const removeMember = (indexToRemove: number) => {
     setMessages((prev) => prev.filter((_, idx) => idx !== indexToRemove));
   };
@@ -112,6 +129,14 @@ export default function ProfileForm({ initialProfile, initialMembers }: ProfileF
     setMessages((prev) =>
       prev.map((m, idx) => (idx === index ? { ...m, ...fields } as FamilyMember : m))
     );
+  };
+
+  // Update relationship and keep the parent/child role in sync with it
+  const updateRelationship = (index: number, relationship: string) => {
+    updateMember(index, {
+      relationship,
+      role: relationship === "子" ? "child" : "parent",
+    });
   };
 
 
@@ -318,6 +343,8 @@ export default function ProfileForm({ initialProfile, initialMembers }: ProfileF
 
               {members.map((member, index) => {
                 const age = calculateAge(member.birthdate);
+                const relationshipSelect = toSelectValue(member.relationship, RELATIONSHIP_OPTIONS);
+                const isSelf = member.relationship === "本人";
 
                 return (
                   <div
@@ -325,8 +352,8 @@ export default function ProfileForm({ initialProfile, initialMembers }: ProfileF
                     className="rounded-2xl p-6 border space-y-5 shadow-sm transition-all duration-300 relative"
                     style={{ background: "var(--card)", borderColor: "var(--border)" }}
                   >
-                    {/* Remove button (Only for child cards) */}
-                    {member.role === "child" && (
+                    {/* Remove button (not shown on the self card) */}
+                    {!isSelf && (
                       <button
                         type="button"
                         onClick={() => removeMember(index)}
@@ -344,8 +371,59 @@ export default function ProfileForm({ initialProfile, initialMembers }: ProfileF
                     <div className="flex items-center gap-2">
                       <span className="text-lg">{member.role === "parent" ? "👩‍🦰" : "👶"}</span>
                       <h3 className="text-sm font-bold" style={{ color: "var(--accent)" }}>
-                        {member.role === "parent" ? "親（ご自身）の情報" : `${member.nickname || `子ども ${index}`}`}
+                        {isSelf ? "ご自身の情報" : `${member.nickname || `家族メンバー ${index}`}`}
                       </h3>
+                    </div>
+
+                    {/* Relationship */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                          続柄
+                        </label>
+                        <select
+                          required
+                          value={relationshipSelect}
+                          onChange={(e) => updateRelationship(index, e.target.value)}
+                          disabled={isLoading}
+                          className="w-full px-3.5 py-2 rounded-xl text-sm outline-none border cursor-pointer"
+                          style={{
+                            background: "var(--background)",
+                            borderColor: "var(--border)",
+                            color: "var(--foreground)",
+                          }}
+                        >
+                          <option value="" disabled>
+                            選択してください
+                          </option>
+                          {RELATIONSHIP_OPTIONS.map((opt) => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {relationshipSelect === "その他" && (
+                        <div className="space-y-1">
+                          <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                            続柄（自由記入）
+                          </label>
+                          <input
+                            type="text"
+                            value={toOtherText(member.relationship, RELATIONSHIP_OPTIONS)}
+                            onChange={(e) => updateRelationship(index, e.target.value || "その他")}
+                            disabled={isLoading}
+                            placeholder="例：叔父, いとこ など"
+                            className="w-full px-3.5 py-2 rounded-xl text-sm outline-none border"
+                            style={{
+                              background: "var(--background)",
+                              borderColor: "var(--border)",
+                              color: "var(--foreground)",
+                            }}
+                          />
+                        </div>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -400,50 +478,56 @@ export default function ProfileForm({ initialProfile, initialMembers }: ProfileF
                     {member.role === "parent" ? (
                       /* Parent Specific UI */
                       <div className="space-y-4 pt-1 border-t" style={{ borderColor: "var(--border)" }}>
-                        {/* Occupation check option */}
-                        <div className="space-y-1.5">
-                          <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                            勤務状況 (どれか1つ)
-                          </label>
-                          <div className="flex flex-wrap gap-2 pt-0.5">
-                            {OCCUPATION_OPTIONS.map((opt) => (
-                              <button
-                                key={opt}
-                                type="button"
-                                onClick={() => updateMember(index, { occupation: opt })}
-                                disabled={isLoading}
-                                className="text-xs px-3.5 py-1.5 rounded-full border transition-all duration-200 cursor-pointer font-medium"
-                                style={{
-                                  background: member.occupation === opt ? "var(--accent)" : "var(--card)",
-                                  borderColor: member.occupation === opt ? "var(--accent)" : "var(--border)",
-                                  color: member.occupation === opt ? "#ffffff" : "var(--muted)",
-                                }}
-                              >
-                                {opt}
-                              </button>
-                            ))}
-                            {/* Option for custom occupation */}
-                            <input
-                              type="text"
-                              value={
-                                OCCUPATION_OPTIONS.includes(member.occupation || "")
-                                  ? ""
-                                  : member.occupation || ""
-                              }
+                        {/* Occupation pulldown */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="space-y-1">
+                            <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                              勤務状況
+                            </label>
+                            <select
+                              value={toSelectValue(member.occupation, OCCUPATION_OPTIONS)}
                               onChange={(e) => updateMember(index, { occupation: e.target.value })}
-                              placeholder="その他（自由入力）"
                               disabled={isLoading}
-                              className="text-xs px-3.5 py-1.5 rounded-full border outline-none max-w-[130px] font-medium"
+                              className="w-full px-3.5 py-2 rounded-xl text-sm outline-none border cursor-pointer"
                               style={{
-                                background:
-                                  member.occupation && !OCCUPATION_OPTIONS.includes(member.occupation)
-                                    ? "var(--accent-light)"
-                                    : "var(--background)",
+                                background: "var(--background)",
                                 borderColor: "var(--border)",
                                 color: "var(--foreground)",
                               }}
-                            />
+                            >
+                              <option value="" disabled>
+                                選択してください
+                              </option>
+                              {OCCUPATION_OPTIONS.map((opt) => (
+                                <option key={opt} value={opt}>
+                                  {opt}
+                                </option>
+                              ))}
+                            </select>
                           </div>
+
+                          {toSelectValue(member.occupation, OCCUPATION_OPTIONS) === "その他" && (
+                            <div className="space-y-1">
+                              <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                                勤務状況（自由記入）
+                              </label>
+                              <input
+                                type="text"
+                                value={toOtherText(member.occupation, OCCUPATION_OPTIONS)}
+                                onChange={(e) =>
+                                  updateMember(index, { occupation: e.target.value || "その他" })
+                                }
+                                disabled={isLoading}
+                                placeholder="例：自営業, フリーランス など"
+                                className="w-full px-3.5 py-2 rounded-xl text-sm outline-none border"
+                                style={{
+                                  background: "var(--background)",
+                                  borderColor: "var(--border)",
+                                  color: "var(--foreground)",
+                                }}
+                              />
+                            </div>
+                          )}
                         </div>
 
                         {/* Parent specific concern */}
@@ -522,10 +606,10 @@ export default function ProfileForm({ initialProfile, initialMembers }: ProfileF
                 );
               })}
 
-              {/* Dynamic Child Adder Button */}
+              {/* Dynamic Member Adder Button */}
               <button
                 type="button"
-                onClick={addChild}
+                onClick={addMember}
                 disabled={isLoading}
                 className="w-full py-4 rounded-2xl text-sm border-2 border-dashed transition-all duration-300 flex items-center justify-center gap-2 hover:bg-[var(--accent-light)] cursor-pointer font-semibold"
                 style={{
@@ -534,7 +618,7 @@ export default function ProfileForm({ initialProfile, initialMembers }: ProfileF
                   background: "var(--card)",
                 }}
               >
-                <span>➕</span> 子どものカードを追加する
+                <span>➕</span> 家族メンバーのカードを追加する
               </button>
             </div>
 
