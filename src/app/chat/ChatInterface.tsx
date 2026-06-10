@@ -10,12 +10,21 @@ interface ChatSession {
   title: string;
   created_at: string;
   updated_at: string;
+  has_memos: boolean;
 }
 
 interface Message {
   role: "user" | "assistant";
   content: string;
   created_at?: string;
+}
+
+interface SessionMemo {
+  id: string;
+  content: string;
+  memo_date: string;
+  created_at: string;
+  updated_at: string;
 }
 
 interface ChatInterfaceProps {
@@ -127,6 +136,17 @@ export default function ChatInterface({
   const [promoError, setPromoError] = useState<string | null>(null);
   const [isPromoLoading, setIsPromoLoading] = useState(false);
 
+  // ── メモ機能の状態 ──
+  const [activeTab, setActiveTab] = useState<"chat" | "memo">("chat");
+  const [memos, setMemos] = useState<SessionMemo[]>([]);
+  const [isMemosLoading, setIsMemosLoading] = useState(false);
+  const [editingMemoId, setEditingMemoId] = useState<string | null>(null);
+  const [editingContent, setEditingContent] = useState("");
+  const [newMemoContent, setNewMemoContent] = useState("");
+  const [isAddingMemo, setIsAddingMemo] = useState(false);
+  const [isSavingMemo, setIsSavingMemo] = useState(false);
+  const [memoError, setMemoError] = useState<string | null>(null);
+
   const handleStartPromo = () => {
     setPromoEmail("");
     setPromoCode("");
@@ -194,6 +214,138 @@ export default function ChatInterface({
     setSessions(initialSessions);
   }, [initialSessions]);
 
+  // メモタブに切り替えた時にメモを取得する
+  useEffect(() => {
+    if (activeTab === "memo" && activeSessionId) {
+      fetchMemos();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, activeSessionId]);
+
+  const fetchMemos = async () => {
+    if (!activeSessionId) return;
+    setIsMemosLoading(true);
+    setMemoError(null);
+    try {
+      const res = await fetch(`/api/memos?session_id=${activeSessionId}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setMemos(data.memos || []);
+    } catch (err: any) {
+      setMemoError(err.message || "メモの取得に失敗しました。");
+    } finally {
+      setIsMemosLoading(false);
+    }
+  };
+
+  const handleAddMemo = async () => {
+    if (!newMemoContent.trim() || !activeSessionId) return;
+    setIsSavingMemo(true);
+    setMemoError(null);
+    try {
+      const today = new Date().toISOString().split("T")[0];
+      const res = await fetch("/api/memos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: activeSessionId,
+          content: newMemoContent.trim(),
+          memo_date: today,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setMemos((prev) => [data.memo, ...prev]);
+      setNewMemoContent("");
+      setIsAddingMemo(false);
+      // サイドバーのhas_memosフラグを更新
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.id === activeSessionId ? { ...s, has_memos: true } : s
+        )
+      );
+    } catch (err: any) {
+      setMemoError(err.message || "メモの作成に失敗しました。");
+    } finally {
+      setIsSavingMemo(false);
+    }
+  };
+
+  const handleUpdateMemo = async (memoId: string) => {
+    if (!editingContent.trim()) return;
+    setIsSavingMemo(true);
+    setMemoError(null);
+    try {
+      const res = await fetch(`/api/memos/${memoId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: editingContent.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setMemos((prev) =>
+        prev.map((m) => (m.id === memoId ? data.memo : m))
+      );
+      setEditingMemoId(null);
+      setEditingContent("");
+    } catch (err: any) {
+      setMemoError(err.message || "メモの更新に失敗しました。");
+    } finally {
+      setIsSavingMemo(false);
+    }
+  };
+
+  const handleDeleteMemo = async (memoId: string) => {
+    if (!confirm("このメモを削除しますか？")) return;
+    setMemoError(null);
+    try {
+      const res = await fetch(`/api/memos/${memoId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error);
+      }
+      const remaining = memos.filter((m) => m.id !== memoId);
+      setMemos(remaining);
+      // メモが0件になったらhas_memosをfalseに
+      if (remaining.length === 0) {
+        setSessions((prev) =>
+          prev.map((s) =>
+            s.id === activeSessionId ? { ...s, has_memos: false } : s
+          )
+        );
+      }
+    } catch (err: any) {
+      setMemoError(err.message || "メモの削除に失敗しました。");
+    }
+  };
+
+  // メモを日付でグループ化するヘルパー
+  const groupMemosByDate = (memoList: SessionMemo[]) => {
+    const groups: { date: string; memos: SessionMemo[] }[] = [];
+    const map = new Map<string, SessionMemo[]>();
+    for (const memo of memoList) {
+      const existing = map.get(memo.memo_date) || [];
+      existing.push(memo);
+      map.set(memo.memo_date, existing);
+    }
+    // 日付降順
+    const sortedDates = Array.from(map.keys()).sort((a, b) => b.localeCompare(a));
+    for (const date of sortedDates) {
+      groups.push({ date, memos: map.get(date)! });
+    }
+    return groups;
+  };
+
+  const formatMemoDate = (dateStr: string) => {
+    try {
+      const d = new Date(dateStr + "T00:00:00");
+      const weekdays = ["日", "月", "火", "水", "木", "金", "土"];
+      return `${d.getMonth() + 1}月${d.getDate()}日（${weekdays[d.getDay()]}）`;
+    } catch {
+      return dateStr;
+    }
+  };
+
   const handleSignOut = async () => {
     setIsSigningOut(true);
     setError(null);
@@ -238,7 +390,7 @@ export default function ChatInterface({
     setMessages((prev) => [...prev, userMessage]);
 
     try {
-      // 2. Post to our API route
+      // 2. Post to our API route (the response body is a text stream)
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: {
@@ -250,30 +402,58 @@ export default function ChatInterface({
         }),
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
         throw new Error(data.error || "通信エラーが発生しました。");
       }
 
-      // 3. Add AI's reply to the message history
-      const assistantMessage: Message = {
-        role: "assistant",
-        content: data.reply,
+      // Session metadata is sent via response headers
+      const newSessionId = response.headers.get("X-Session-Id");
+      const rawTitle = response.headers.get("X-Session-Title");
+      const newSessionTitle = rawTitle ? decodeURIComponent(rawTitle) : null;
+
+      // 3. Read the streaming body and render the AI reply in real time
+      if (!response.body) {
+        throw new Error("通信エラーが発生しました。");
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let assistantStarted = false;
+
+      const appendChunk = (chunk: string) => {
+        if (!chunk) return;
+        if (!assistantStarted) {
+          assistantStarted = true;
+          setMessages((prev) => [...prev, { role: "assistant", content: chunk }]);
+        } else {
+          setMessages((prev) => {
+            const updated = [...prev];
+            const last = updated[updated.length - 1];
+            updated[updated.length - 1] = { ...last, content: last.content + chunk };
+            return updated;
+          });
+        }
       };
-      setMessages((prev) => [...prev, assistantMessage]);
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        appendChunk(decoder.decode(value, { stream: true }));
+      }
+      appendChunk(decoder.decode());
 
       // 4. Handle new session redirection/state update
-      if (!activeSessionId && data.sessionId) {
+      if (!activeSessionId && newSessionId) {
         // This was a new session! Add it to list and redirect
         const newSession: ChatSession = {
-          id: data.sessionId,
-          title: data.title || "新しい相談",
+          id: newSessionId,
+          title: newSessionTitle || "新しい相談",
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
+          has_memos: false,
         };
         setSessions((prev) => [newSession, ...prev]);
-        router.push(`/chat?session_id=${data.sessionId}`);
+        router.push(`/chat?session_id=${newSessionId}`);
       } else if (activeSessionId) {
         // Existing session: Update updated_at of the active session and move to top
         setSessions((prev) => {
@@ -489,10 +669,24 @@ export default function ChatInterface({
                     </button>
                   </div>
 
-                  {/* Updated Time */}
-                  <span className="text-[10px] pl-1 font-medium" style={{ color: "var(--muted)" }}>
-                    {formatDate(session.updated_at)}
-                  </span>
+                  {/* Updated Time & Memo indicator */}
+                  <div className="flex items-center justify-between pl-1">
+                    <span className="text-[10px] font-medium" style={{ color: "var(--muted)" }}>
+                      {formatDate(session.updated_at)}
+                    </span>
+                    {session.has_memos && (
+                      <span
+                        title="メモあり"
+                        className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold flex items-center gap-0.5"
+                        style={{ background: "var(--accent-light)", color: "var(--accent)" }}
+                      >
+                        <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                        </svg>
+                        メモ
+                      </span>
+                    )}
+                  </div>
                 </div>
               );
             })
@@ -589,6 +783,51 @@ export default function ChatInterface({
           </div>
         </header>
 
+        {/* チャット / メモ タブ（セッションがある場合のみ表示） */}
+        {activeSessionId && (
+          <div
+            className="flex border-b shrink-0"
+            style={{ borderColor: "var(--border)", background: "var(--card)" }}
+          >
+            {(["chat", "memo"] as const).map((tab) => (
+              <button
+                key={tab}
+                id={`tab-${tab}`}
+                onClick={() => {
+                  setActiveTab(tab);
+                  if (tab === "memo") {
+                    setIsAddingMemo(false);
+                    setEditingMemoId(null);
+                    setNewMemoContent("");
+                  }
+                }}
+                className="flex-1 py-2.5 text-xs font-semibold transition-all duration-200 flex items-center justify-center gap-1.5 cursor-pointer"
+                style={{
+                  borderBottom: activeTab === tab ? "2px solid var(--accent)" : "2px solid transparent",
+                  color: activeTab === tab ? "var(--accent)" : "var(--muted)",
+                  background: "transparent",
+                }}
+              >
+                {tab === "chat" ? (
+                  <>
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                    チャット
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                    メモ
+                  </>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Guest Warning Banner */}
         {localIsAnonymous && (
           <div
@@ -615,8 +854,180 @@ export default function ChatInterface({
           </div>
         )}
 
+        {/* ── メモタブ ── */}
+        {activeTab === "memo" && activeSessionId && (
+          <main className="flex-1 overflow-y-auto px-5 py-6" style={{ background: "var(--background)" }}>
+            <div className="max-w-2xl mx-auto space-y-5">
+
+              {/* 説明文 */}
+              <div
+                className="p-4 rounded-xl text-xs leading-relaxed flex items-start gap-2.5"
+                style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--muted)" }}
+              >
+                <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                </svg>
+                <span>
+                  トライしたこと、そのときの気持ち、気になっていること…<br />
+                  思ったことを自由に残しておきましょう。
+                </span>
+              </div>
+
+              {/* メモエラー */}
+              {memoError && (
+                <div className="p-3 rounded-xl text-xs border" style={{ background: "#FFF0F1", borderColor: "#FAD4D6", color: "#E15256" }}>
+                  {memoError}
+                </div>
+              )}
+
+              {/* ＋ メモを追加 */}
+              {!isAddingMemo ? (
+                <button
+                  id="btn-add-memo"
+                  onClick={() => setIsAddingMemo(true)}
+                  className="w-full py-2.5 rounded-xl text-xs font-semibold border-2 border-dashed transition-all duration-200 hover:border-[var(--accent)] hover:text-[var(--accent)] flex items-center justify-center gap-1.5 cursor-pointer"
+                  style={{ borderColor: "var(--border)", color: "var(--muted)", background: "transparent" }}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                  </svg>
+                  メモを追加
+                </button>
+              ) : (
+                <div
+                  className="rounded-xl border p-4 space-y-3 animate-fade-in"
+                  style={{ background: "var(--card)", borderColor: "var(--accent)" }}
+                >
+                  <textarea
+                    id="new-memo-textarea"
+                    autoFocus
+                    rows={4}
+                    value={newMemoContent}
+                    onChange={(e) => setNewMemoContent(e.target.value)}
+                    placeholder="ここに書いてみましょう…"
+                    className="w-full text-sm leading-relaxed outline-none resize-none"
+                    style={{ background: "transparent", color: "var(--foreground)" }}
+                  />
+                  <div className="flex justify-end gap-2">
+                    <button
+                      onClick={() => { setIsAddingMemo(false); setNewMemoContent(""); }}
+                      className="text-xs px-3.5 py-1.5 rounded-lg border font-medium transition-colors cursor-pointer"
+                      style={{ color: "var(--muted)", borderColor: "var(--border)", background: "var(--card)" }}
+                    >
+                      キャンセル
+                    </button>
+                    <button
+                      onClick={handleAddMemo}
+                      disabled={!newMemoContent.trim() || isSavingMemo}
+                      className="text-xs px-3.5 py-1.5 rounded-lg font-semibold text-white transition-all duration-200 flex items-center gap-1.5 cursor-pointer"
+                      style={{ background: "var(--accent)", opacity: !newMemoContent.trim() || isSavingMemo ? 0.6 : 1 }}
+                    >
+                      {isSavingMemo ? <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /> : "保存"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* メモ一覧（日付グループ） */}
+              {isMemosLoading ? (
+                <div className="flex justify-center py-10">
+                  <span className="w-5 h-5 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: "var(--accent)" }} />
+                </div>
+              ) : groupMemosByDate(memos).length === 0 ? (
+                <div className="text-center py-10 text-xs" style={{ color: "var(--muted)" }}>
+                  まだメモはありません。
+                </div>
+              ) : (
+                groupMemosByDate(memos).map(({ date, memos: dateMemos }) => (
+                  <div key={date} className="space-y-2">
+                    {/* 日付ラベル */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-semibold" style={{ color: "var(--muted)" }}>
+                        {formatMemoDate(date)}
+                      </span>
+                      <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+                    </div>
+
+                    {/* その日のメモカード */}
+                    {dateMemos.map((memo) => (
+                      <div
+                        key={memo.id}
+                        className="rounded-xl border p-4 space-y-2 transition-shadow duration-200 hover:shadow-sm"
+                        style={{ background: "var(--card)", borderColor: "var(--border)" }}
+                      >
+                        {editingMemoId === memo.id ? (
+                          /* 編集モード */
+                          <div className="space-y-3">
+                            <textarea
+                              autoFocus
+                              rows={4}
+                              value={editingContent}
+                              onChange={(e) => setEditingContent(e.target.value)}
+                              className="w-full text-sm leading-relaxed outline-none resize-none"
+                              style={{ background: "transparent", color: "var(--foreground)" }}
+                            />
+                            <div className="flex justify-end gap-2">
+                              <button
+                                onClick={() => { setEditingMemoId(null); setEditingContent(""); }}
+                                className="text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors cursor-pointer"
+                                style={{ color: "var(--muted)", borderColor: "var(--border)", background: "var(--card)" }}
+                              >
+                                キャンセル
+                              </button>
+                              <button
+                                onClick={() => handleUpdateMemo(memo.id)}
+                                disabled={!editingContent.trim() || isSavingMemo}
+                                className="text-xs px-3 py-1.5 rounded-lg font-semibold text-white transition-all cursor-pointer"
+                                style={{ background: "var(--accent)", opacity: !editingContent.trim() || isSavingMemo ? 0.6 : 1 }}
+                              >
+                                {isSavingMemo ? <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" /> : "更新"}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          /* 表示モード */
+                          <>
+                            <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: "var(--foreground)" }}>
+                              {memo.content}
+                            </p>
+                            <div className="flex justify-end gap-1.5 pt-1">
+                              <button
+                                onClick={() => { setEditingMemoId(memo.id); setEditingContent(memo.content); }}
+                                title="編集"
+                                className="p-1.5 rounded-lg transition-colors hover:bg-[var(--accent-light)] cursor-pointer"
+                                style={{ color: "var(--muted)" }}
+                              >
+                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                </svg>
+                              </button>
+                              <button
+                                onClick={() => handleDeleteMemo(memo.id)}
+                                title="削除"
+                                className="p-1.5 rounded-lg transition-colors hover:bg-red-50 hover:text-red-500 cursor-pointer"
+                                style={{ color: "var(--muted)" }}
+                              >
+                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ))
+              )}
+            </div>
+          </main>
+        )}
+
         {/* Chat Feed */}
-        <main className="flex-1 overflow-y-auto px-6 py-8 space-y-6">
+        <main
+          className="flex-1 overflow-y-auto px-6 py-8 space-y-6"
+          style={{ display: activeTab === "memo" ? "none" : undefined }}
+        >
           <div className="max-w-2xl mx-auto space-y-6">
             
             {messages.length === 0 ? (
@@ -691,8 +1102,8 @@ export default function ChatInterface({
               ))
             )}
 
-            {/* AI is thinking/typing indicator */}
-            {isLoading && (
+            {/* AI is thinking/typing indicator (hidden once the reply starts streaming in) */}
+            {isLoading && messages[messages.length - 1]?.role !== "assistant" && (
               <div className="flex gap-3.5 justify-start animate-pulse">
                 <AssistantAvatar />
                 <div

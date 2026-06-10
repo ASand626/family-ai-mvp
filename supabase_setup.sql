@@ -100,3 +100,63 @@ BEGIN
         WITH CHECK (auth.uid() = user_id);
     END IF;
 END $$;
+
+-- =====================================================================
+-- 4.4. chat_sessions テーブルに summary（相談要約）カラムを追加
+-- =====================================================================
+-- AIが各セッションの会話を自動要約して保存し、新しい相談スレッドで
+-- 過去の文脈を引き継ぐために使用します。
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'chat_sessions' AND column_name = 'summary'
+    ) THEN
+        ALTER TABLE public.chat_sessions ADD COLUMN summary TEXT DEFAULT NULL;
+    END IF;
+END $$;
+
+-- =====================================================================
+-- 4.5. family_members テーブルに relationship（続柄）カラムを追加
+-- =====================================================================
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'family_members' AND column_name = 'relationship'
+    ) THEN
+        ALTER TABLE public.family_members ADD COLUMN relationship TEXT;
+    END IF;
+END $$;
+
+-- =====================================================================
+-- 5. session_memos テーブルの作成とRLS設定（相談メモ機能）
+-- =====================================================================
+CREATE TABLE IF NOT EXISTS public.session_memos (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_id UUID NOT NULL REFERENCES public.chat_sessions(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    memo_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- RLS（Row Level Security）の有効化
+ALTER TABLE public.session_memos ENABLE ROW LEVEL SECURITY;
+
+-- 自分が所有するメモのみ操作可能なポリシーを設定
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'session_memos' AND policyname = 'Users can manage their own session memos'
+    ) THEN
+        CREATE POLICY "Users can manage their own session memos" 
+        ON public.session_memos
+        FOR ALL 
+        TO authenticated
+        USING (auth.uid() = user_id)
+        WITH CHECK (auth.uid() = user_id);
+    END IF;
+END $$;

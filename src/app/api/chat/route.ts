@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { after } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { formatProfileForAI } from '@/utils/profileFormatter'
@@ -24,41 +25,40 @@ export async function POST(request: Request) {
     })
 
     let sessionId = clientSessionId
-    let generatedTitle = null
+    let sessionTitle: string | null = null
+    let titlePromise: Promise<string> | null = null
 
-    // 3. Create a new chat session if sessionId is not provided
+    // 3. Create a new chat session if sessionId is not provided.
+    // Title generation runs in the background so it doesn't delay the first streamed token.
     if (!sessionId) {
-      // 3a. Generate title using Claude
-      let title = '新しい相談'
-      try {
-        const titleResponse = await anthropic.messages.create({
+      sessionTitle = '新しい相談'
+
+      titlePromise = anthropic.messages
+        .create({
           model: 'claude-sonnet-4-6',
           max_tokens: 50,
           system: 'あなたは入力されたユーザーの相談内容（メッセージ）から、15文字以内の自然で分かりやすい日本語のチャットのタイトル（例：「平日の家事分担」「育児と仕事の両立」「パートナーとの会話」など）を1つだけ生成するアシスタントです。タイトル以外の余計な文章や説明、記号（カギカッコなど）は一切出力しないでください。',
           messages: [{ role: 'user', content: message }],
         })
-        const textContent = titleResponse.content
-          .filter((block) => block.type === 'text')
-          .map((block) => block.text)
-          .join('')
-          .trim()
-          .replace(/[「」"']/g, '')
-        
-        if (textContent) {
-          title = textContent
-        }
-      } catch (titleErr) {
-        console.error('Failed to generate title:', titleErr)
-        // Fallback to default
-      }
-      generatedTitle = title
+        .then((titleResponse) =>
+          titleResponse.content
+            .filter((block) => block.type === 'text')
+            .map((block) => block.text)
+            .join('')
+            .trim()
+            .replace(/[「」"']/g, '')
+        )
+        .catch((titleErr) => {
+          console.error('Failed to generate title:', titleErr)
+          return ''
+        })
 
-      // 3b. Insert new chat session into Supabase
+      // Insert new chat session into Supabase with a placeholder title
       const { data: newSession, error: sessionError } = await supabase
         .from('chat_sessions')
         .insert({
           user_id: user.id,
-          title: title,
+          title: sessionTitle,
         })
         .select('id')
         .single()
@@ -71,42 +71,63 @@ export async function POST(request: Request) {
       sessionId = newSession.id
     }
 
-    // 4. Save the user's message to Supabase conversations table with session_id
-    const { error: userMsgError } = await supabase
-      .from('conversations')
-      .insert({
+    // 4-6. Run all DB work in parallel to minimize time-to-first-token:
+    // save the user's message, and fetch profile / members / past summaries /
+    // session history at the same time. The just-sent message is appended to
+    // the history manually below, so the history query doesn't need to wait
+    // for the insert.
+    const [userInsertResult, profileResult, membersResult, pastSessionsResult, historyResult] = await Promise.all([
+      supabase.from('conversations').insert({
         user_id: user.id,
         session_id: sessionId,
         role: 'user',
         content: message,
-      })
+      }),
+      supabase.from('profiles').select('family_summary, concerns').eq('user_id', user.id).maybeSingle(),
+      supabase.from('family_members').select('*').eq('user_id', user.id).order('created_at', { ascending: true }),
+      supabase
+        .from('chat_sessions')
+        .select('title, summary')
+        .eq('user_id', user.id)
+        .neq('id', sessionId)
+        .not('summary', 'is', null)
+        .order('updated_at', { ascending: false })
+        .limit(3),
+      supabase
+        .from('conversations')
+        .select('role, content, created_at')
+        .eq('user_id', user.id)
+        .eq('session_id', sessionId)
+        .order('created_at', { ascending: true }) // chronological order
+        .limit(20),
+    ])
 
-    if (userMsgError) {
-      console.error('Failed to save user message:', userMsgError)
+    if (userInsertResult.error) {
+      console.error('Failed to save user message:', userInsertResult.error)
       return NextResponse.json({ error: 'Failed to save conversation history' }, { status: 500 })
     }
 
-    // 5. Fetch family profile and family members in parallel for high performance
-    const [profileResult, membersResult] = await Promise.all([
-      supabase.from('profiles').select('family_summary, concerns').eq('user_id', user.id).maybeSingle(),
-      supabase.from('family_members').select('*').eq('user_id', user.id).order('created_at', { ascending: true })
-    ])
-
     const profile = profileResult.data
     const members = membersResult.data || []
+    const pastSessions = pastSessionsResult.data || []
 
     const formattedProfileString = formatProfileForAI(profile, members)
 
-    // 6. Fetch recent conversation history for this specific session (limit to 20 most recent messages)
-    const { data: rawHistory } = await supabase
-      .from('conversations')
-      .select('role, content, created_at')
-      .eq('user_id', user.id)
-      .eq('session_id', sessionId)
-      .order('created_at', { ascending: true }) // chronological order
-      .limit(20)
+    // Build past consultation summaries block for the system prompt
+    let pastSummariesBlock = ''
+    if (pastSessions.length > 0) {
+      const lines = pastSessions
+        .map((s) => `・「${s.title}」: ${s.summary}`)
+        .join('\n')
+      pastSummariesBlock = `
 
-    const history = rawHistory || []
+【過去の相談セッションの要約（新しい順・最大3件）】
+${lines}
+
+上記は同じ相談者との過去の相談の要約です。関連がある場合は、過去の経緯を踏まえた継続的な伴走として自然に文脈を引き継いでください。ただし、過去の話題を不必要に蒸し返すことは避けてください。`
+    }
+
+    const history = historyResult.data || []
 
     // 7. Build system prompt reflecting rules from docs/ai_behavior.md
     const systemPrompt = `あなたは家庭の悩みに寄り添い、整理を支援する優秀で温厚なAIパートナーです。
@@ -144,60 +165,150 @@ export async function POST(request: Request) {
     - 回答文全体として、AIが自動生成したレポートや要約書のような冷たいトーンを避け、親身な相談相手から届くチャットメッセージのような、温かみのある自然な日本語表現を心がけてください。
 
 【相談者の家庭プロフィール】
-${formattedProfileString}
+${formattedProfileString}${pastSummariesBlock}
 
 上記のプロフィール情報を前提知識として、相談者に寄り添った対話を行ってください。毎回プロフィールについてゼロから説明させることなく、これまでの文脈を深く理解している親しい伴走者として振る舞ってください。`
 
     // 8. Format conversation history for Anthropic API
-    const formattedMessages = history.map((msg) => ({
+    const formattedMessages: Anthropic.MessageParam[] = history.map((msg) => ({
       role: msg.role as 'user' | 'assistant',
       content: msg.content,
     }))
 
-    // If the history is empty or does not end with 'user''s latest input, we ensure it's correct.
-    if (formattedMessages.length === 0) {
+    // The history query ran in parallel with the user-message insert, so the
+    // latest input may not be included yet — append it unless it's already there.
+    const lastMessage = formattedMessages[formattedMessages.length - 1]
+    if (!lastMessage || lastMessage.role !== 'user' || lastMessage.content !== message) {
       formattedMessages.push({
         role: 'user',
         content: message,
       })
     }
 
-    // 9. Generate AI reply
-    const response = await anthropic.messages.create({
+    // 9. Generate AI reply as a stream
+    const claudeStream = anthropic.messages.stream({
       model: 'claude-sonnet-4-6',
       max_tokens: 1024,
-      system: systemPrompt,
+      // Cache the large system prompt: within a conversation it's stable, so
+      // 2nd+ turns get faster time-to-first-token and cheaper input tokens.
+      system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
       messages: formattedMessages,
     })
 
-    // Extract reply text from the blocks
-    const reply = response.content
-      .filter((block) => block.type === 'text')
-      .map((block) => block.text)
-      .join('\n')
+    const encoder = new TextEncoder()
+    let fullReply = ''
+    let resolveStreamDone!: (reply: string) => void
+    const streamDone = new Promise<string>((resolve) => {
+      resolveStreamDone = resolve
+    })
 
-    // 10. Save the AI's reply to Supabase conversations table with session_id
-    const { error: assistantMsgError } = await supabase
-      .from('conversations')
-      .insert({
-        user_id: user.id,
-        session_id: sessionId,
-        role: 'assistant',
-        content: reply,
-      })
+    const readable = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        try {
+          for await (const event of claudeStream) {
+            if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+              fullReply += event.delta.text
+              controller.enqueue(encoder.encode(event.delta.text))
+            }
+          }
 
-    if (assistantMsgError) {
-      console.error('Failed to save assistant reply:', assistantMsgError)
-      // Even if saving failed, we still return the response to the user so UX doesn't break
+          // Persist the assistant reply BEFORE closing the stream, so that when
+          // the client navigates right after the stream ends, the message is
+          // already in the DB.
+          if (fullReply) {
+            const { error: assistantMsgError } = await supabase
+              .from('conversations')
+              .insert({
+                user_id: user.id,
+                session_id: sessionId,
+                role: 'assistant',
+                content: fullReply,
+              })
+            if (assistantMsgError) {
+              console.error('Failed to save assistant reply:', assistantMsgError)
+            }
+          }
+
+          // For new sessions, persist the generated title once it's ready
+          if (titlePromise) {
+            const generatedTitle = await titlePromise
+            if (generatedTitle) {
+              await supabase
+                .from('chat_sessions')
+                .update({ title: generatedTitle })
+                .eq('id', sessionId)
+            }
+          }
+
+          // Keep the session recent
+          await supabase
+            .from('chat_sessions')
+            .update({ updated_at: new Date().toISOString() })
+            .eq('id', sessionId)
+
+          controller.close()
+        } catch (err) {
+          console.error('Streaming error:', err)
+          controller.error(err)
+        } finally {
+          resolveStreamDone(fullReply)
+        }
+      },
+    })
+
+    // 10. After the response has finished streaming, generate an updated session
+    // summary in the background so it never blocks the chat response itself.
+    after(async () => {
+      try {
+        const reply = await streamDone
+        if (!reply) return
+
+        // Build a plain-text transcript of the latest conversation
+        const transcript = [...formattedMessages, { role: 'assistant' as const, content: reply }]
+          .map((m) => `${m.role === 'user' ? '相談者' : 'AI'}: ${typeof m.content === 'string' ? m.content : ''}`)
+          .join('\n\n')
+
+        const summaryResponse = await anthropic.messages.create({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 500,
+          system:
+            'あなたは家族相談チャットの会話を要約するアシスタントです。以下の相談会話から、次回以降の相談で文脈を引き継ぐために重要な情報（相談の主題、家庭の状況、相談者の気持ち、試したこと・提案されたこと、今後の方向性）を300字以内の日本語で簡潔にまとめてください。要約文のみを出力し、前置きや説明は一切不要です。',
+          messages: [{ role: 'user', content: transcript }],
+        })
+
+        const summary = summaryResponse.content
+          .filter((block) => block.type === 'text')
+          .map((block) => block.text)
+          .join('')
+          .trim()
+
+        if (summary) {
+          const { error: summaryError } = await supabase
+            .from('chat_sessions')
+            .update({ summary })
+            .eq('id', sessionId)
+          if (summaryError) {
+            console.error('Failed to save session summary:', summaryError)
+          }
+        }
+      } catch (summaryErr) {
+        console.error('Failed to generate session summary:', summaryErr)
+      }
+    })
+
+    // 11. Return the streaming response. Session metadata goes in headers so the
+    // body can be a pure text stream the client renders incrementally.
+    const headers: Record<string, string> = {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
+      'X-Session-Id': sessionId,
+    }
+    if (sessionTitle !== null) {
+      // Only present for newly created sessions (URI-encoded: headers are ASCII-only)
+      headers['X-Session-Title'] = encodeURIComponent(sessionTitle)
     }
 
-    // 11. Update updated_at of the session to keep it recent
-    await supabase
-      .from('chat_sessions')
-      .update({ updated_at: new Date().toISOString() })
-      .eq('id', sessionId)
-
-    return NextResponse.json({ reply, sessionId, title: generatedTitle })
+    return new Response(readable, { headers })
   } catch (error: any) {
     console.error('API Chat Route error:', error)
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 })
