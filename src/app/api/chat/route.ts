@@ -212,7 +212,7 @@ ${formattedProfileString}${pastSummariesBlock}
     // 9. Generate AI reply as a stream
     const claudeStream = anthropic.messages.stream({
       model: 'claude-sonnet-4-6',
-      max_tokens: 1024,
+      max_tokens: 4096,
       // Cache the large system prompt: within a conversation it's stable, so
       // 2nd+ turns get faster time-to-first-token and cheaper input tokens.
       system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
