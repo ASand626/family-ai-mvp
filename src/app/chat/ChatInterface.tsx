@@ -8,6 +8,7 @@ import { createClient } from "@/utils/supabase/client";
 interface ChatSession {
   id: string;
   title: string;
+  mode: string;
   created_at: string;
   updated_at: string;
   has_memos: boolean;
@@ -23,6 +24,16 @@ interface SessionMemo {
   id: string;
   content: string;
   memo_date: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface SessionAction {
+  id: string;
+  session_id: string;
+  title: string;
+  status: "todo" | "done";
+  reflection: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -136,8 +147,10 @@ export default function ChatInterface({
   const [promoError, setPromoError] = useState<string | null>(null);
   const [isPromoLoading, setIsPromoLoading] = useState(false);
 
+  // ── タブ状態 ──
+  const [activeTab, setActiveTab] = useState<"chat" | "memo" | "action">("chat");
+
   // ── メモ機能の状態 ──
-  const [activeTab, setActiveTab] = useState<"chat" | "memo">("chat");
   const [memos, setMemos] = useState<SessionMemo[]>([]);
   const [isMemosLoading, setIsMemosLoading] = useState(false);
   const [editingMemoId, setEditingMemoId] = useState<string | null>(null);
@@ -146,6 +159,186 @@ export default function ChatInterface({
   const [isAddingMemo, setIsAddingMemo] = useState(false);
   const [isSavingMemo, setIsSavingMemo] = useState(false);
   const [memoError, setMemoError] = useState<string | null>(null);
+
+  // ── アクションプラン（PDCA）の状態 ──
+  const [actions, setActions] = useState<SessionAction[]>([]);
+  const [isActionsLoading, setIsActionsLoading] = useState(false);
+  const [editingActionId, setEditingActionId] = useState<string | null>(null);
+  const [editingActionTitle, setEditingActionTitle] = useState("");
+  const [editingReflectionId, setEditingReflectionId] = useState<string | null>(null);
+  const [editingReflectionContent, setEditingReflectionContent] = useState("");
+  const [newActionTitle, setNewActionTitle] = useState("");
+  const [isSavingAction, setIsSavingAction] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [isChangingMode, setIsChangingMode] = useState(false);
+  const [newSessionMode, setNewSessionMode] = useState<"counsel" | "solution">("counsel");
+
+  // Fetch actions when action tab is active
+  useEffect(() => {
+    if (activeTab === "action" && activeSessionId) {
+      fetchActions();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, activeSessionId]);
+
+  const fetchActions = async () => {
+    if (!activeSessionId) return;
+    setIsActionsLoading(true);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/actions?session_id=${activeSessionId}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setActions(data.actions || []);
+    } catch (err: any) {
+      setActionError(err.message || "アクションの取得に失敗しました。");
+    } finally {
+      setIsActionsLoading(false);
+    }
+  };
+
+  const handleAddAction = async () => {
+    if (!newActionTitle.trim() || !activeSessionId) return;
+    setIsSavingAction(true);
+    setActionError(null);
+    try {
+      const res = await fetch("/api/actions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: activeSessionId,
+          title: newActionTitle.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setActions((prev) => [...prev, data.action]);
+      setNewActionTitle("");
+    } catch (err: any) {
+      setActionError(err.message || "アクションの作成に失敗しました。");
+    } finally {
+      setIsSavingAction(false);
+    }
+  };
+
+  const handleToggleActionStatus = async (actionId: string, currentStatus: "todo" | "done") => {
+    setActionError(null);
+    const nextStatus = currentStatus === "todo" ? "done" : "todo";
+    try {
+      const res = await fetch(`/api/actions/${actionId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setActions((prev) =>
+        prev.map((a) => (a.id === actionId ? data.action : a))
+      );
+      
+      if (nextStatus === "done") {
+        setEditingReflectionId(actionId);
+        const action = actions.find(a => a.id === actionId);
+        setEditingReflectionContent(action?.reflection || "");
+      }
+    } catch (err: any) {
+      setActionError(err.message || "ステータスの更新に失敗しました。");
+    }
+  };
+
+  const handleSaveReflection = async (actionId: string) => {
+    setIsSavingAction(true);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/actions/${actionId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reflection: editingReflectionContent.trim() || null }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setActions((prev) =>
+        prev.map((a) => (a.id === actionId ? data.action : a))
+      );
+      setEditingReflectionId(null);
+      setEditingReflectionContent("");
+    } catch (err: any) {
+      setActionError(err.message || "振り返りの保存に失敗しました。");
+    } finally {
+      setIsSavingAction(false);
+    }
+  };
+
+  const handleUpdateActionTitle = async (actionId: string) => {
+    if (!editingActionTitle.trim()) return;
+    setIsSavingAction(true);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/actions/${actionId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: editingActionTitle.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setActions((prev) =>
+        prev.map((a) => (a.id === actionId ? data.action : a))
+      );
+      setEditingActionId(null);
+      setEditingActionTitle("");
+    } catch (err: any) {
+      setActionError(err.message || "アクションの更新に失敗しました。");
+    } finally {
+      setIsSavingAction(false);
+    }
+  };
+
+  const handleDeleteAction = async (actionId: string) => {
+    if (!confirm("このアクションプランを削除しますか？")) return;
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/actions/${actionId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error);
+      }
+      setActions((prev) => prev.filter((a) => a.id !== actionId));
+    } catch (err: any) {
+      setActionError(err.message || "アクションの削除に失敗しました。");
+    }
+  };
+
+  const handleSwitchSessionMode = async (targetMode: "counsel" | "solution") => {
+    if (!activeSessionId) {
+      setNewSessionMode(targetMode);
+      return;
+    }
+    setIsChangingMode(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/chat/sessions/${activeSessionId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: targetMode }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.id === activeSessionId ? { ...s, mode: targetMode } : s
+        )
+      );
+
+      if (targetMode === "counsel" && activeTab === "action") {
+        setActiveTab("chat");
+      }
+    } catch (err: any) {
+      setError(err.message || "モードの変更に失敗しました。");
+    } finally {
+      setIsChangingMode(false);
+    }
+  };
 
   const handleStartPromo = () => {
     setPromoEmail("");
@@ -399,6 +592,7 @@ export default function ChatInterface({
         body: JSON.stringify({
           message: trimmedMessage,
           sessionId: activeSessionId,
+          mode: !activeSessionId ? newSessionMode : undefined,
         }),
       });
 
@@ -448,6 +642,7 @@ export default function ChatInterface({
         const newSession: ChatSession = {
           id: newSessionId,
           title: newSessionTitle || "新しい相談",
+          mode: newSessionMode,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
           has_memos: false,
@@ -752,9 +947,37 @@ export default function ChatInterface({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </button>
-            <span className="text-lg font-semibold tracking-tight truncate max-w-[200px] sm:max-w-md" style={{ color: "var(--foreground)" }}>
+            <span className="text-lg font-semibold tracking-tight truncate max-w-[200px] sm:max-w-xs" style={{ color: "var(--foreground)" }}>
               {activeSession ? activeSession.title : "新しい相談室"}
             </span>
+            {activeSession && (
+              <div className="flex items-center gap-1.5 ml-2">
+                <button
+                  onClick={() => handleSwitchSessionMode(activeSession.mode === "counsel" ? "solution" : "counsel")}
+                  disabled={isChangingMode}
+                  className="px-2.5 py-1 rounded-full text-[10px] font-semibold flex items-center gap-1.5 transition-all cursor-pointer border hover:shadow-sm"
+                  style={{
+                    background: activeSession.mode === "solution" ? "var(--accent)" : "transparent",
+                    borderColor: "var(--accent)",
+                    color: activeSession.mode === "solution" ? "#ffffff" : "var(--accent)",
+                    opacity: isChangingMode ? 0.7 : 1,
+                  }}
+                  title="クリックして相談モード/解決モードを切り替え"
+                >
+                  {activeSession.mode === "solution" ? (
+                    <>
+                      <span>🧭 解決モード</span>
+                      <span className="opacity-75 text-[9px]">→ 相談</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>🕯️ 相談モード</span>
+                      <span className="opacity-75 text-[9px]">→ 解決</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
@@ -783,13 +1006,16 @@ export default function ChatInterface({
           </div>
         </header>
 
-        {/* チャット / メモ タブ（セッションがある場合のみ表示） */}
+        {/* チャット / メモ / アクション タブ（セッションがある場合のみ表示） */}
         {activeSessionId && (
           <div
             className="flex border-b shrink-0"
             style={{ borderColor: "var(--border)", background: "var(--card)" }}
           >
-            {(["chat", "memo"] as const).map((tab) => (
+            {(activeSession?.mode === "solution"
+              ? (["chat", "memo", "action"] as const)
+              : (["chat", "memo"] as const)
+            ).map((tab) => (
               <button
                 key={tab}
                 id={`tab-${tab}`}
@@ -799,6 +1025,10 @@ export default function ChatInterface({
                     setIsAddingMemo(false);
                     setEditingMemoId(null);
                     setNewMemoContent("");
+                  } else if (tab === "action") {
+                    setNewActionTitle("");
+                    setEditingActionId(null);
+                    setEditingReflectionId(null);
                   }
                 }}
                 className="flex-1 py-2.5 text-xs font-semibold transition-all duration-200 flex items-center justify-center gap-1.5 cursor-pointer"
@@ -815,12 +1045,19 @@ export default function ChatInterface({
                     </svg>
                     チャット
                   </>
-                ) : (
+                ) : tab === "memo" ? (
                   <>
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                     </svg>
                     メモ
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                    </svg>
+                    アクション
                   </>
                 )}
               </button>
@@ -1023,10 +1260,261 @@ export default function ChatInterface({
           </main>
         )}
 
+        {/* ── アクションプランタブ ── */}
+        {activeTab === "action" && activeSessionId && (
+          <main className="flex-1 overflow-y-auto px-5 py-6" style={{ background: "var(--background)" }}>
+            <div className="max-w-2xl mx-auto space-y-5 animate-fade-in">
+
+              {/* 説明文 */}
+              <div
+                className="p-4 rounded-xl text-xs leading-relaxed flex items-start gap-2.5"
+                style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--muted)" }}
+              >
+                <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                </svg>
+                <span>
+                  チャットで話したことから、今日から試してみたい「小さな一歩」を登録しましょう。<br />
+                  実行できたらチェックを入れて、振り返りを残しておくと成長を実感しやすくなります。
+                </span>
+              </div>
+
+              {/* アクションエラー */}
+              {actionError && (
+                <div className="p-3 rounded-xl text-xs border" style={{ background: "#FFF0F1", borderColor: "#FAD4D6", color: "#E15256" }}>
+                  {actionError}
+                </div>
+              )}
+
+              {/* アクション追加フォーム */}
+              <div
+                className="rounded-xl border p-4 space-y-3"
+                style={{ background: "var(--card)", borderColor: "var(--border)" }}
+              >
+                <div className="flex gap-2">
+                  <input
+                    id="new-action-input"
+                    type="text"
+                    value={newActionTitle}
+                    onChange={(e) => setNewActionTitle(e.target.value)}
+                    placeholder="例：今日パートナーに『ありがとう』と伝える、夜10分間お風呂でゆっくりする…"
+                    className="flex-1 text-sm outline-none px-3 py-2 rounded-lg border focus:border-[var(--accent)]"
+                    style={{ borderColor: "var(--border)", background: "transparent", color: "var(--foreground)" }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddAction();
+                      }
+                    }}
+                  />
+                  <button
+                    onClick={handleAddAction}
+                    disabled={!newActionTitle.trim() || isSavingAction}
+                    className="text-xs px-4 py-2 rounded-lg font-semibold text-white transition-all cursor-pointer whitespace-nowrap"
+                    style={{ background: "var(--accent)", opacity: !newActionTitle.trim() || isSavingAction ? 0.6 : 1 }}
+                  >
+                    追加
+                  </button>
+                </div>
+              </div>
+
+              {/* アクションプラン一覧 */}
+              {isActionsLoading ? (
+                <div className="flex justify-center py-10">
+                  <span className="w-5 h-5 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: "var(--accent)" }} />
+                </div>
+              ) : actions.length === 0 ? (
+                <div className="text-center py-10 text-xs" style={{ color: "var(--muted)" }}>
+                  まだアクションプランはありません。チャットで話し合ったアイデアを登録してみましょう！
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {actions.map((action) => (
+                    <div
+                      key={action.id}
+                      className="rounded-xl border p-4 space-y-3 transition-shadow duration-200 hover:shadow-sm"
+                      style={{
+                        background: "var(--card)",
+                        borderColor: "var(--border)",
+                        opacity: action.status === "done" ? 0.85 : 1
+                      }}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3 flex-1 min-w-0">
+                          {/* チェックボックス */}
+                          <button
+                            onClick={() => handleToggleActionStatus(action.id, action.status)}
+                            className="mt-0.5 w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition-colors cursor-pointer"
+                            style={{
+                              borderColor: action.status === "done" ? "var(--accent)" : "var(--border)",
+                              background: action.status === "done" ? "var(--accent)" : "transparent",
+                            }}
+                          >
+                            {action.status === "done" && (
+                              <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              </svg>
+                            )}
+                          </button>
+
+                          {editingActionId === action.id ? (
+                            /* 編集入力 */
+                            <div className="flex-1 flex gap-2">
+                              <input
+                                autoFocus
+                                type="text"
+                                value={editingActionTitle}
+                                onChange={(e) => setEditingActionTitle(e.target.value)}
+                                className="flex-1 text-sm outline-none px-2 py-1 rounded border"
+                                style={{ borderColor: "var(--border)", background: "transparent", color: "var(--foreground)" }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    handleUpdateActionTitle(action.id);
+                                  }
+                                }}
+                              />
+                              <button
+                                onClick={() => handleUpdateActionTitle(action.id)}
+                                className="text-xs px-2.5 py-1 rounded bg-gray-100 hover:bg-gray-200 border transition-colors cursor-pointer"
+                              >
+                                保存
+                              </button>
+                              <button
+                                onClick={() => setEditingActionId(null)}
+                                className="text-xs px-2.5 py-1 rounded text-gray-500 hover:bg-gray-50 border transition-colors cursor-pointer"
+                              >
+                                キャンセル
+                              </button>
+                            </div>
+                          ) : (
+                            /* タイトル表示 */
+                            <span
+                              className={`text-sm font-medium break-words leading-relaxed ${
+                                action.status === "done" ? "line-through" : ""
+                              }`}
+                              style={{ color: action.status === "done" ? "var(--muted)" : "var(--foreground)" }}
+                            >
+                              {action.title}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* アクション操作（編集・削除） */}
+                        {editingActionId !== action.id && (
+                          <div className="flex gap-1.5 shrink-0">
+                            <button
+                              onClick={() => {
+                                setEditingActionId(action.id);
+                                setEditingActionTitle(action.title);
+                              }}
+                              title="編集"
+                              className="p-1 rounded-lg transition-colors hover:bg-[var(--accent-light)] cursor-pointer"
+                              style={{ color: "var(--muted)" }}
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={() => handleDeleteAction(action.id)}
+                              title="削除"
+                              className="p-1 rounded-lg transition-colors hover:bg-red-50 hover:text-red-500 cursor-pointer"
+                              style={{ color: "var(--muted)" }}
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* 振り返りセクション */}
+                      {action.status === "done" && (
+                        <div
+                          className="mt-2.5 p-3 rounded-lg border text-xs space-y-2"
+                          style={{
+                            background: "rgba(194, 119, 138, 0.05)",
+                            borderColor: "var(--border)",
+                          }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold flex items-center gap-1" style={{ color: "var(--accent)" }}>
+                              <span>💭</span> 振り返り・気づいたこと
+                            </span>
+                            {editingReflectionId !== action.id && (
+                              <button
+                                onClick={() => {
+                                  setEditingReflectionId(action.id);
+                                  setEditingReflectionContent(action.reflection || "");
+                                }}
+                                className="text-[10px] underline hover:text-[var(--accent)] font-semibold transition-colors cursor-pointer"
+                                style={{ color: "var(--muted)" }}
+                              >
+                                {action.reflection ? "編集する" : "振り返りを書く"}
+                              </button>
+                            )}
+                          </div>
+
+                          {editingReflectionId === action.id ? (
+                            /* 振り返り編集入力 */
+                            <div className="space-y-2 pt-1">
+                              <textarea
+                                autoFocus
+                                rows={3}
+                                value={editingReflectionContent}
+                                onChange={(e) => setEditingReflectionContent(e.target.value)}
+                                placeholder="実際にやってみてどうでしたか？（気持ちの変化や工夫できたことなど）"
+                                className="w-full text-xs leading-relaxed outline-none resize-none p-2 rounded-lg border bg-white"
+                                style={{ borderColor: "var(--border)", color: "var(--foreground)" }}
+                              />
+                              <div className="flex justify-end gap-1.5">
+                                <button
+                                  onClick={() => {
+                                    setEditingReflectionId(null);
+                                    setEditingReflectionContent("");
+                                  }}
+                                  className="px-2.5 py-1 rounded border font-medium bg-white hover:bg-gray-50 text-[10px] cursor-pointer"
+                                  style={{ borderColor: "var(--border)", color: "var(--muted)" }}
+                                >
+                                  キャンセル
+                                </button>
+                                <button
+                                  onClick={() => handleSaveReflection(action.id)}
+                                  disabled={isSavingAction}
+                                  className="px-2.5 py-1 rounded text-white font-semibold text-[10px] hover:opacity-90 cursor-pointer"
+                                  style={{ background: "var(--accent)" }}
+                                >
+                                  保存
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            /* 振り返り表示 */
+                            <p className="leading-relaxed" style={{ color: "var(--foreground)" }}>
+                              {action.reflection ? (
+                                <span className="whitespace-pre-wrap">{action.reflection}</span>
+                              ) : (
+                                <span className="italic" style={{ color: "var(--muted)" }}>
+                                  振り返りがまだありません。「振り返りを書く」から記録を残しましょう。
+                                </span>
+                              )}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </main>
+        )}
+
         {/* Chat Feed */}
         <main
           className="flex-1 overflow-y-auto px-6 py-8 space-y-6"
-          style={{ display: activeTab === "memo" ? "none" : undefined }}
+          style={{ display: activeTab !== "chat" ? "none" : undefined }}
         >
           <div className="max-w-2xl mx-auto space-y-6">
             
@@ -1045,6 +1533,39 @@ export default function ChatInterface({
                     頭の中でこんがらがっていることを何でも話してください。
                     あなたの家庭事情に寄り添いながら一緒に整理します。
                   </p>
+                </div>
+
+                {/* Mode Selector Card */}
+                <div className="space-y-3 max-w-lg mx-auto text-left pt-2">
+                  <p className="text-xs font-semibold px-1" style={{ color: "var(--accent)" }}>🛡️ 相談モードを選択してください：</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button
+                      onClick={() => handleSwitchSessionMode("counsel")}
+                      className="p-4 rounded-xl border text-xs text-left leading-relaxed transition-all duration-300 hover:shadow-md cursor-pointer flex flex-col gap-1.5 active:scale-[0.99]"
+                      style={{
+                        background: newSessionMode === "counsel" ? "var(--accent-light)" : "var(--card)",
+                        borderColor: newSessionMode === "counsel" ? "var(--accent)" : "var(--border)",
+                      }}
+                    >
+                      <span className="text-sm font-semibold" style={{ color: "var(--foreground)" }}>🕯️ 相談モード (傾聴優先)</span>
+                      <span className="leading-normal" style={{ color: "var(--muted)", fontSize: "11px" }}>
+                        お気持ちや悩みをとにかく吐き出したい時に。AIが優しく傾聴し、頭の整理に伴走します。
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => handleSwitchSessionMode("solution")}
+                      className="p-4 rounded-xl border text-xs text-left leading-relaxed transition-all duration-300 hover:shadow-md cursor-pointer flex flex-col gap-1.5 active:scale-[0.99]"
+                      style={{
+                        background: newSessionMode === "solution" ? "var(--accent-light)" : "var(--card)",
+                        borderColor: newSessionMode === "solution" ? "var(--accent)" : "var(--border)",
+                      }}
+                    >
+                      <span className="text-sm font-semibold" style={{ color: "var(--foreground)" }}>🧭 解決モード (課題整理)</span>
+                      <span className="leading-normal" style={{ color: "var(--muted)", fontSize: "11px" }}>
+                        課題解決に向けて動きたい時に。小さな一歩を決めて、少しずつ前に進みます。
+                      </span>
+                    </button>
+                  </div>
                 </div>
                 
                 {/* Quick Prompts Suggestions */}
@@ -1150,67 +1671,69 @@ export default function ChatInterface({
         </main>
 
         {/* Input Area (Sticky Footer) */}
-        <footer
-          className="px-6 py-4 border-t shrink-0"
-          style={{ borderColor: "var(--border)", background: "var(--card)" }}
-        >
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleSend(inputValue);
-            }}
-            className="max-w-2xl mx-auto flex gap-3"
+        {activeTab === "chat" && (
+          <footer
+            className="px-6 py-4 border-t shrink-0 animate-fade-in"
+            style={{ borderColor: "var(--border)", background: "var(--card)" }}
           >
-            <textarea
-              rows={1}
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              disabled={isLoading}
-              onKeyDown={(e) => {
-                // Send message on Enter key press without Shift key
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  e.currentTarget.form?.requestSubmit();
-                }
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSend(inputValue);
               }}
-              placeholder="AIに相談する（長文も歓迎です。Shift+Enterで改行します）..."
-              className="flex-1 px-4 py-3 rounded-xl text-sm outline-none transition-all duration-200 resize-none h-[46px] max-h-[120px] overflow-y-auto leading-relaxed"
-              style={{
-                background: "var(--background)",
-                border: "1px solid var(--border)",
-                color: "var(--foreground)",
-              }}
-              onFocus={(e) => {
-                e.currentTarget.style.borderColor = "var(--accent)";
-                e.currentTarget.style.boxShadow = "0 0 0 3px var(--accent-light)";
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.borderColor = "var(--border)";
-                e.currentTarget.style.boxShadow = "none";
-              }}
-            />
-            <button
-              type="submit"
-              disabled={isLoading || !inputValue.trim()}
-              className="w-12 h-[46px] rounded-xl flex items-center justify-center text-white transition-all duration-300 hover:shadow-sm"
-              style={{
-                background: "var(--accent)",
-                opacity: isLoading || !inputValue.trim() ? 0.6 : 1,
-                cursor: isLoading || !inputValue.trim() ? "not-allowed" : "pointer",
-              }}
+              className="max-w-2xl mx-auto flex gap-3"
             >
-              <svg
-                className="w-5 h-5 transform rotate-90"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2.5}
+              <textarea
+                rows={1}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                disabled={isLoading}
+                onKeyDown={(e) => {
+                  // Send message on Enter key press without Shift key
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    e.currentTarget.form?.requestSubmit();
+                  }
+                }}
+                placeholder="AIに相談する（長文も歓迎です。Shift+Enterで改行します）..."
+                className="flex-1 px-4 py-3 rounded-xl text-sm outline-none transition-all duration-200 resize-none h-[46px] max-h-[120px] overflow-y-auto leading-relaxed"
+                style={{
+                  background: "var(--background)",
+                  border: "1px solid var(--border)",
+                  color: "var(--foreground)",
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = "var(--accent)";
+                  e.currentTarget.style.boxShadow = "0 0 0 3px var(--accent-light)";
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = "var(--border)";
+                  e.currentTarget.style.boxShadow = "none";
+                }}
+              />
+              <button
+                type="submit"
+                disabled={isLoading || !inputValue.trim()}
+                className="w-12 h-[46px] rounded-xl flex items-center justify-center text-white transition-all duration-300 hover:shadow-sm"
+                style={{
+                  background: "var(--accent)",
+                  opacity: isLoading || !inputValue.trim() ? 0.6 : 1,
+                  cursor: isLoading || !inputValue.trim() ? "not-allowed" : "pointer",
+                }}
               >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-              </svg>
-            </button>
-          </form>
-        </footer>
+                <svg
+                  className="w-5 h-5 transform rotate-90"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2.5}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+              </button>
+            </form>
+          </footer>
+        )}
       </div>
 
       {/* Promotion (Email Linking) Modal */}

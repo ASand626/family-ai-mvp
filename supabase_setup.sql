@@ -160,3 +160,50 @@ BEGIN
         WITH CHECK (auth.uid() = user_id);
     END IF;
 END $$;
+
+-- =====================================================================
+-- 6. chat_sessions テーブルに mode カラムを追加（相談モード/解決モード）
+-- =====================================================================
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'chat_sessions' AND column_name = 'mode'
+    ) THEN
+        ALTER TABLE public.chat_sessions ADD COLUMN mode TEXT NOT NULL DEFAULT 'counsel';
+    END IF;
+END $$;
+
+-- =====================================================================
+-- 7. session_actions テーブルの作成とRLS設定（アクションプラン機能）
+-- =====================================================================
+CREATE TABLE IF NOT EXISTS public.session_actions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    session_id UUID NOT NULL REFERENCES public.chat_sessions(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'todo', -- 'todo', 'done'
+    reflection TEXT DEFAULT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- RLS（Row Level Security）の有効化
+ALTER TABLE public.session_actions ENABLE ROW LEVEL SECURITY;
+
+-- 自分が所有するアクションのみ操作可能なポリシーを設定
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'session_actions' AND policyname = 'Users can manage their own session actions'
+    ) THEN
+        CREATE POLICY "Users can manage their own session actions" 
+        ON public.session_actions
+        FOR ALL 
+        TO authenticated
+        USING (auth.uid() = user_id)
+        WITH CHECK (auth.uid() = user_id);
+    END IF;
+END $$;
+

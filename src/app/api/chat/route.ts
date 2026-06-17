@@ -6,7 +6,7 @@ import { formatProfileForAI } from '@/utils/profileFormatter'
 
 export async function POST(request: Request) {
   try {
-    const { message, sessionId: clientSessionId } = await request.json()
+    const { message, sessionId: clientSessionId, mode } = await request.json()
     if (!message) {
       return NextResponse.json({ error: 'Message is required' }, { status: 400 })
     }
@@ -59,6 +59,7 @@ export async function POST(request: Request) {
         .insert({
           user_id: user.id,
           title: sessionTitle,
+          mode: mode || 'counsel',
         })
         .select('id')
         .single()
@@ -76,7 +77,11 @@ export async function POST(request: Request) {
     // session history at the same time. The just-sent message is appended to
     // the history manually below, so the history query doesn't need to wait
     // for the insert.
-    const [userInsertResult, profileResult, membersResult, pastSessionsResult, historyResult] = await Promise.all([
+    const currentSessionPromise = sessionId
+      ? supabase.from('chat_sessions').select('mode').eq('id', sessionId).maybeSingle()
+      : Promise.resolve({ data: null, error: null })
+
+    const [userInsertResult, profileResult, membersResult, pastSessionsResult, historyResult, currentSessionResult] = await Promise.all([
       supabase.from('conversations').insert({
         user_id: user.id,
         session_id: sessionId,
@@ -100,6 +105,7 @@ export async function POST(request: Request) {
         .eq('session_id', sessionId)
         .order('created_at', { ascending: true }) // chronological order
         .limit(20),
+      currentSessionPromise,
     ])
 
     if (userInsertResult.error) {
@@ -128,6 +134,24 @@ ${lines}
     }
 
     const history = historyResult.data || []
+
+    // Determine the active mode: existing session overrides the request param
+    const activeMode = (currentSessionResult.data?.mode as string) || mode || 'counsel'
+
+    const modeInstruction = activeMode === 'solution'
+      ? `
+14. 解決モードでの回答スタイル（アクションプラン形式）：
+    現在のセッションは「解決モード」に設定されています。相談者は気持ちの整理が済んでおり、具体的な行動変容を求めています。以下を心がけてください：
+    ・共感を丁寧に示しながらも、状況整理の後は具体的な提案や次のステップに移ってください。
+    ・返答の末尾に、今すぐ試せる小さな一歩を1〜3個、以下の形式で提案してください：
+
+    【アクションプラン案】
+    1. （具体的なアクション）
+    2. （具体的なアクション）
+    3. （具体的なアクション）
+
+    ・アクションは「今日・今週中にできる」小さなものを意識してください。`
+      : ''
 
     // 7. Build system prompt reflecting rules from docs/ai_behavior.md
     const systemPrompt = `あなたは家庭の悩みに寄り添い、整理を支援する優秀で温厚なAIパートナーです。
@@ -162,7 +186,7 @@ ${lines}
     - 見出しやセクションの区切りを表現したい場合は、行頭に「【状況の整理】」や「■ 出来事について」「◆ お気持ちの整理」などの日本語の括弧や記号を用い、見出しの前後には必ず改行（空行）を挟んでください。
     - 特定の単語を強調したい場合は、マークダウンの太字（**）は使わず、カギカッコ「」などで囲むか、文脈で重要性を表現してください。
     - 箇条書きや構造化を行う場合は、マークダウンの「-」や「*」ではなく、日本語の「・」や番号（「1.」「2.」など）を使用し、自然な文章の流れを維持してください。
-    - 回答文全体として、AIが自動生成したレポートや要約書のような冷たいトーンを避け、親身な相談相手から届くチャットメッセージのような、温かみのある自然な日本語表現を心がけてください。
+    - 回答文全体として、AIが自動生成したレポートや要約書のような冷たいトーンを避け、親身な相談相手から届くチャットメッセージのような、温かみのある自然な日本語表現を心がけてください。${modeInstruction}
 
 【相談者の家庭プロフィール】
 ${formattedProfileString}${pastSummariesBlock}
@@ -302,6 +326,7 @@ ${formattedProfileString}${pastSummariesBlock}
       'Content-Type': 'text/plain; charset=utf-8',
       'Cache-Control': 'no-cache, no-transform',
       'X-Session-Id': sessionId,
+      'X-Session-Mode': activeMode,
     }
     if (sessionTitle !== null) {
       // Only present for newly created sessions (URI-encoded: headers are ASCII-only)
