@@ -448,11 +448,11 @@ export default function ProfileForm({ initialProfile, initialMembers }: ProfileF
                         />
                       </div>
 
-                      {/* Birthdate */}
+                      {/* Birthdate (year & month only) */}
                       <div className="space-y-1">
                         <div className="flex items-center justify-between">
                           <label className="block text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                            生年月日
+                            生年月
                           </label>
                           {age && (
                             <span className="text-[11px] font-bold" style={{ color: "var(--accent)" }}>
@@ -461,9 +461,13 @@ export default function ProfileForm({ initialProfile, initialMembers }: ProfileF
                           )}
                         </div>
                         <input
-                          type="date"
-                          value={member.birthdate}
-                          onChange={(e) => updateMember(index, { birthdate: e.target.value })}
+                          type="month"
+                          value={member.birthdate ? member.birthdate.slice(0, 7) : ""}
+                          onChange={(e) =>
+                            updateMember(index, {
+                              birthdate: e.target.value ? `${e.target.value}-01` : "",
+                            })
+                          }
                           disabled={isLoading}
                           className="w-full px-3.5 py-2 rounded-xl text-sm outline-none border text-gray-600"
                           style={{

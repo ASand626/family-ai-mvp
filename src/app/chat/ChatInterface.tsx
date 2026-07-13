@@ -398,6 +398,40 @@ export default function ChatInterface({
   const router = useRouter();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // ── ストリーミング表示を読める速度に制御するためのタイプライター用バッファ ──
+  const revealQueueRef = useRef("");
+  const revealTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const REVEAL_CHARS_PER_TICK = 1;
+  const REVEAL_INTERVAL_MS = 50;
+
+  useEffect(() => {
+    return () => {
+      if (revealTimerRef.current) clearInterval(revealTimerRef.current);
+    };
+  }, []);
+
+  const startRevealTimer = () => {
+    if (revealTimerRef.current) return;
+    revealTimerRef.current = setInterval(() => {
+      if (revealQueueRef.current.length === 0) {
+        if (revealTimerRef.current) {
+          clearInterval(revealTimerRef.current);
+          revealTimerRef.current = null;
+        }
+        return;
+      }
+      const nextChars = revealQueueRef.current.slice(0, REVEAL_CHARS_PER_TICK);
+      revealQueueRef.current = revealQueueRef.current.slice(REVEAL_CHARS_PER_TICK);
+      setMessages((prev) => {
+        const last = prev[prev.length - 1];
+        if (!last || last.role !== "assistant") return prev;
+        const updated = [...prev];
+        updated[updated.length - 1] = { ...last, content: last.content + nextChars };
+        return updated;
+      });
+    }, REVEAL_INTERVAL_MS);
+  };
+
   // Sync props to state when they change
   useEffect(() => {
     setMessages(initialHistory);
@@ -613,20 +647,16 @@ export default function ChatInterface({
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let assistantStarted = false;
+      revealQueueRef.current = "";
 
       const appendChunk = (chunk: string) => {
         if (!chunk) return;
         if (!assistantStarted) {
           assistantStarted = true;
-          setMessages((prev) => [...prev, { role: "assistant", content: chunk }]);
-        } else {
-          setMessages((prev) => {
-            const updated = [...prev];
-            const last = updated[updated.length - 1];
-            updated[updated.length - 1] = { ...last, content: last.content + chunk };
-            return updated;
-          });
+          setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
         }
+        revealQueueRef.current += chunk;
+        startRevealTimer();
       };
 
       while (true) {

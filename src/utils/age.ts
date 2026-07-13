@@ -27,7 +27,7 @@ export function calculateAge(birthdateStr: string | null | undefined): string {
 
   // Future birthdate protection
   if (years < 0) {
-    return "生年月日が未来です";
+    return "生年月が未来です";
   }
 
   if (years >= 12) {
