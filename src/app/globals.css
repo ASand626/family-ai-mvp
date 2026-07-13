@@ -27,3 +27,12 @@ body {
 * {
   box-sizing: border-box;
 }
+
+/* iOSでフォーム要素をタップした際に自動でズームされるのを防ぐ（フォントサイズ16px未満だとズームされる） */
+@media (max-width: 640px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}

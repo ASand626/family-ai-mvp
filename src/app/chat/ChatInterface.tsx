@@ -397,6 +397,30 @@ export default function ChatInterface({
 
   const router = useRouter();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const chatScrollRef = useRef<HTMLElement>(null);
+  const inputTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+
+  const handleChatScroll = () => {
+    const el = chatScrollRef.current;
+    if (!el) return;
+    setShowScrollTop(el.scrollTop > 400);
+  };
+
+  const scrollChatToTop = () => {
+    chatScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // 入力内容に合わせてテキストエリアの高さを自動調整する
+  const autoResizeTextarea = (el: HTMLTextAreaElement | null) => {
+    if (!el) return;
+    el.style.height = "46px";
+    el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+  };
+
+  useEffect(() => {
+    autoResizeTextarea(inputTextareaRef.current);
+  }, [inputValue]);
 
   // ── ストリーミング表示を読める速度に制御するためのタイプライター用バッファ ──
   const revealQueueRef = useRef("");
@@ -777,7 +801,7 @@ export default function ChatInterface({
   ];
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: "var(--background)" }}>
+    <div className="flex h-dvh overflow-hidden" style={{ background: "var(--background)" }}>
       
       {/* Mobile Sidebar Overlay */}
       {isSidebarOpen && (
@@ -960,7 +984,7 @@ export default function ChatInterface({
       </aside>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col h-full min-w-0">
+      <div className="flex-1 flex flex-col h-full min-w-0 relative">
         
         {/* Main Header */}
         <header
@@ -1543,6 +1567,8 @@ export default function ChatInterface({
 
         {/* Chat Feed */}
         <main
+          ref={chatScrollRef}
+          onScroll={handleChatScroll}
           className="flex-1 overflow-y-auto px-6 py-8 space-y-6"
           style={{ display: activeTab !== "chat" ? "none" : undefined }}
         >
@@ -1700,6 +1726,21 @@ export default function ChatInterface({
           </div>
         </main>
 
+        {/* Scroll to top button */}
+        {activeTab === "chat" && showScrollTop && (
+          <button
+            type="button"
+            onClick={scrollChatToTop}
+            title="一番上のチャットに戻る"
+            className="absolute right-5 bottom-24 sm:bottom-28 z-10 w-10 h-10 rounded-full flex items-center justify-center border shadow-md transition-all duration-200 hover:shadow-lg active:scale-95 cursor-pointer animate-fade-in"
+            style={{ background: "var(--card)", borderColor: "var(--border)", color: "var(--accent)" }}
+          >
+            <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+            </svg>
+          </button>
+        )}
+
         {/* Input Area (Sticky Footer) */}
         {activeTab === "chat" && (
           <footer
@@ -1714,6 +1755,7 @@ export default function ChatInterface({
               className="max-w-2xl mx-auto flex gap-3"
             >
               <textarea
+                ref={inputTextareaRef}
                 rows={1}
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
