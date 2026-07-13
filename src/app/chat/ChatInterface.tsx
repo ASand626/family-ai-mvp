@@ -1640,7 +1640,7 @@ export default function ChatInterface({
                       <span className="text-base shrink-0">{item.emoji}</span>
                       <div>
                         <p className="font-semibold mb-0.5" style={{ color: "var(--foreground)" }}>{item.title}</p>
-                        <p className="line-clamp-2" style={{ color: "var(--muted)" }}>{item.prompt}</p>
+                        <p className="sm:line-clamp-2" style={{ color: "var(--muted)" }}>{item.prompt}</p>
                       </div>
                     </button>
                   ))}
