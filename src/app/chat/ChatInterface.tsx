@@ -87,6 +87,13 @@ function parseInlineStyles(text: string) {
   });
 }
 
+function formatMessageTime(createdAt?: string) {
+  if (!createdAt) return "";
+  const date = new Date(createdAt);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
+}
+
 function renderMessageContent(content: string, role: "user" | "assistant") {
   const lines = content.split("\n");
   const isUser = role === "user";
@@ -637,6 +644,7 @@ export default function ChatInterface({
     const userMessage: Message = {
       role: "user",
       content: trimmedMessage,
+      created_at: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, userMessage]);
 
@@ -677,7 +685,7 @@ export default function ChatInterface({
         if (!chunk) return;
         if (!assistantStarted) {
           assistantStarted = true;
-          setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+          setMessages((prev) => [...prev, { role: "assistant", content: "", created_at: new Date().toISOString() }]);
         }
         revealQueueRef.current += chunk;
         startRevealTimer();
@@ -1654,14 +1662,26 @@ export default function ChatInterface({
               </div>
             ) : (
               /* Render Messages */
-              messages.map((msg, index) => (
+              messages.map((msg, index) => {
+                const timeLabel = formatMessageTime(msg.created_at);
+                return (
                 <div
                   key={index}
-                  className={`flex gap-3.5 ${msg.role === "user" ? "justify-end" : "justify-start"} animate-fade-in`}
+                  className={`flex items-end gap-3.5 ${msg.role === "user" ? "justify-end" : "justify-start"} animate-fade-in`}
                 >
                   {/* AI Avatar */}
                   {msg.role === "assistant" && (
                     <AssistantAvatar />
+                  )}
+
+                  {/* Timestamp (LINE style: to the left of own message) */}
+                  {msg.role === "user" && timeLabel && (
+                    <span
+                      className="text-[10px] shrink-0 whitespace-nowrap pb-0.5"
+                      style={{ color: "var(--muted)" }}
+                    >
+                      {timeLabel}
+                    </span>
                   )}
 
                   {/* Message Bubble */}
@@ -1681,8 +1701,19 @@ export default function ChatInterface({
                       {renderMessageContent(msg.content, msg.role)}
                     </div>
                   </div>
+
+                  {/* Timestamp (LINE style: to the right of received message) */}
+                  {msg.role === "assistant" && timeLabel && (
+                    <span
+                      className="text-[10px] shrink-0 whitespace-nowrap pb-0.5"
+                      style={{ color: "var(--muted)" }}
+                    >
+                      {timeLabel}
+                    </span>
+                  )}
                 </div>
-              ))
+                );
+              })
             )}
 
             {/* AI is thinking/typing indicator (hidden once the reply starts streaming in) */}
