@@ -1569,8 +1569,14 @@ export default function ChatInterface({
         <main
           ref={chatScrollRef}
           onScroll={handleChatScroll}
-          className="flex-1 overflow-y-auto px-6 py-8 space-y-6"
-          style={{ display: activeTab !== "chat" ? "none" : undefined }}
+          className="flex-1 overflow-y-auto px-6 py-8 space-y-6 transition-colors duration-500"
+          style={{
+            display: activeTab !== "chat" ? "none" : undefined,
+            background:
+              (activeSession?.mode ?? newSessionMode) === "solution"
+                ? "var(--chat-bg-solution)"
+                : "var(--chat-bg-counsel)",
+          }}
         >
           <div className="max-w-2xl mx-auto space-y-6">
             

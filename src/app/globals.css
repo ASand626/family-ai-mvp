@@ -8,6 +8,8 @@
   --accent: #C2778A;
   --accent-light: #FCE8ED;
   --card: #FFFBFC;
+  --chat-bg-counsel: #F4F1FA;
+  --chat-bg-solution: #EEF6F1;
 }
 
 @theme inline {
