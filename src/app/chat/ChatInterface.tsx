@@ -87,13 +87,13 @@ function parseInlineStyles(text: string) {
   });
 }
 
-function formatMessageTime(createdAt?: string) {
-  if (!createdAt) return "";
+function formatMessageTimeParts(createdAt?: string): { datePart: string; timePart: string } | null {
+  if (!createdAt) return null;
   const date = new Date(createdAt);
-  if (Number.isNaN(date.getTime())) return "";
+  if (Number.isNaN(date.getTime())) return null;
   const datePart = date.toLocaleDateString("ja-JP", { year: "numeric", month: "numeric", day: "numeric" });
   const timePart = date.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
-  return `${datePart} ${timePart}`;
+  return { datePart, timePart };
 }
 
 function renderMessageContent(content: string, role: "user" | "assistant") {
@@ -1665,7 +1665,7 @@ export default function ChatInterface({
             ) : (
               /* Render Messages */
               messages.map((msg, index) => {
-                const timeLabel = formatMessageTime(msg.created_at);
+                const timeParts = formatMessageTimeParts(msg.created_at);
                 return (
                 <div
                   key={index}
@@ -1677,12 +1677,13 @@ export default function ChatInterface({
                   )}
 
                   {/* Timestamp (LINE style: to the left of own message) */}
-                  {msg.role === "user" && timeLabel && (
+                  {msg.role === "user" && timeParts && (
                     <span
-                      className="text-[10px] shrink-0 whitespace-nowrap pb-0.5"
+                      className="flex flex-col items-end sm:flex-row sm:items-baseline sm:gap-1 text-[10px] shrink-0 whitespace-nowrap pb-0.5"
                       style={{ color: "var(--muted)" }}
                     >
-                      {timeLabel}
+                      <span>{timeParts.datePart}</span>
+                      <span>{timeParts.timePart}</span>
                     </span>
                   )}
 
@@ -1705,12 +1706,13 @@ export default function ChatInterface({
                   </div>
 
                   {/* Timestamp (LINE style: to the right of received message) */}
-                  {msg.role === "assistant" && timeLabel && (
+                  {msg.role === "assistant" && timeParts && (
                     <span
-                      className="text-[10px] shrink-0 whitespace-nowrap pb-0.5"
+                      className="flex flex-col items-start sm:flex-row sm:items-baseline sm:gap-1 text-[10px] shrink-0 whitespace-nowrap pb-0.5"
                       style={{ color: "var(--muted)" }}
                     >
-                      {timeLabel}
+                      <span>{timeParts.datePart}</span>
+                      <span>{timeParts.timePart}</span>
                     </span>
                   )}
                 </div>
