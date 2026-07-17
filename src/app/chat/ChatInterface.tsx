@@ -91,7 +91,9 @@ function formatMessageTime(createdAt?: string) {
   if (!createdAt) return "";
   const date = new Date(createdAt);
   if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
+  const datePart = date.toLocaleDateString("ja-JP", { month: "numeric", day: "numeric" });
+  const timePart = date.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
+  return `${datePart} ${timePart}`;
 }
 
 function renderMessageContent(content: string, role: "user" | "assistant") {
