@@ -13,6 +13,7 @@ interface ChatSession {
   created_at: string;
   updated_at: string;
   has_memos: boolean;
+  has_actions: boolean;
 }
 
 interface Message {
@@ -231,6 +232,12 @@ export default function ChatInterface({
       if (!res.ok) throw new Error(data.error);
       setActions((prev) => [...prev, data.action]);
       setNewActionTitle("");
+      // サイドバーのhas_actionsフラグを更新
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.id === activeSessionId ? { ...s, has_actions: true } : s
+        )
+      );
     } catch (err: any) {
       setActionError(err.message || "アクションの作成に失敗しました。");
     } finally {
@@ -319,7 +326,16 @@ export default function ChatInterface({
         const data = await res.json();
         throw new Error(data.error);
       }
-      setActions((prev) => prev.filter((a) => a.id !== actionId));
+      const remaining = actions.filter((a) => a.id !== actionId);
+      setActions(remaining);
+      // アクションが0件になったらhas_actionsをfalseに
+      if (remaining.length === 0) {
+        setSessions((prev) =>
+          prev.map((s) =>
+            s.id === activeSessionId ? { ...s, has_actions: false } : s
+          )
+        );
+      }
     } catch (err: any) {
       setActionError(err.message || "アクションの削除に失敗しました。");
     }
@@ -751,6 +767,7 @@ export default function ChatInterface({
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
           has_memos: false,
+          has_actions: false,
         };
         setSessions((prev) => [newSession, ...prev]);
         router.push(`/chat?session_id=${newSessionId}`);
@@ -922,18 +939,32 @@ export default function ChatInterface({
           <span className="text-[10px] font-medium" style={{ color: "var(--muted)" }}>
             {formatDate(session.updated_at)}
           </span>
-          {session.has_memos && (
-            <span
-              title="メモあり"
-              className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold flex items-center gap-0.5"
-              style={{ background: "var(--accent-light)", color: "var(--accent)" }}
-            >
-              <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-              </svg>
-              メモ
-            </span>
-          )}
+          <div className="flex items-center gap-1">
+            {session.has_memos && (
+              <span
+                title="メモあり"
+                className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold flex items-center gap-0.5"
+                style={{ background: "var(--accent-light)", color: "var(--accent)" }}
+              >
+                <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                </svg>
+                メモ
+              </span>
+            )}
+            {session.has_actions && (
+              <span
+                title="アクションプランあり"
+                className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold flex items-center gap-0.5"
+                style={{ background: "var(--accent-light)", color: "var(--accent)" }}
+              >
+                <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                アクション
+              </span>
+            )}
+          </div>
         </div>
       </div>
     );
