@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
 
@@ -87,13 +87,18 @@ function parseInlineStyles(text: string) {
   });
 }
 
-function formatMessageTimeParts(createdAt?: string): { datePart: string; timePart: string } | null {
+function formatMessageTime(createdAt?: string) {
+  if (!createdAt) return "";
+  const date = new Date(createdAt);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatDateDivider(createdAt?: string) {
   if (!createdAt) return null;
   const date = new Date(createdAt);
   if (Number.isNaN(date.getTime())) return null;
-  const datePart = date.toLocaleDateString("ja-JP", { year: "numeric", month: "numeric", day: "numeric" });
-  const timePart = date.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
-  return { datePart, timePart };
+  return date.toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric" });
 }
 
 function renderMessageContent(content: string, role: "user" | "assistant") {
@@ -1665,57 +1670,69 @@ export default function ChatInterface({
             ) : (
               /* Render Messages */
               messages.map((msg, index) => {
-                const timeParts = formatMessageTimeParts(msg.created_at);
+                const timeLabel = formatMessageTime(msg.created_at);
+                const dateDivider = formatDateDivider(msg.created_at);
+                const prevDateDivider = index > 0 ? formatDateDivider(messages[index - 1].created_at) : null;
+                const showDateDivider = dateDivider !== null && dateDivider !== prevDateDivider;
                 return (
-                <div
-                  key={index}
-                  className={`flex items-end gap-3.5 ${msg.role === "user" ? "justify-end" : "justify-start"} animate-fade-in`}
-                >
-                  {/* AI Avatar */}
-                  {msg.role === "assistant" && (
-                    <AssistantAvatar />
-                  )}
-
-                  {/* Timestamp (LINE style: to the left of own message) */}
-                  {msg.role === "user" && timeParts && (
-                    <span
-                      className="flex flex-col items-end sm:flex-row sm:items-baseline sm:gap-1 text-[10px] shrink-0 whitespace-nowrap pb-0.5"
-                      style={{ color: "var(--muted)" }}
-                    >
-                      <span>{timeParts.datePart}</span>
-                      <span>{timeParts.timePart}</span>
-                    </span>
-                  )}
-
-                  {/* Message Bubble */}
-                  <div
-                    className={`max-w-[82%] px-4 py-3 shadow-sm border transition-shadow duration-200 hover:shadow-md ${
-                      msg.role === "user"
-                        ? "rounded-2xl rounded-tr-none text-white"
-                        : "rounded-2xl rounded-tl-none"
-                    }`}
-                    style={{
-                      background: msg.role === "user" ? "var(--accent)" : "var(--card)",
-                      borderColor: msg.role === "user" ? "var(--accent)" : "var(--border)",
-                      color: msg.role === "user" ? "#ffffff" : "var(--foreground)",
-                    }}
-                  >
-                    <div className="text-sm leading-relaxed font-medium">
-                      {renderMessageContent(msg.content, msg.role)}
+                <Fragment key={index}>
+                  {showDateDivider && (
+                    <div className="flex items-center justify-center py-1">
+                      <span
+                        className="text-[11px] font-medium px-3 py-1 rounded-full border"
+                        style={{ background: "var(--card)", color: "var(--muted)", borderColor: "var(--border)" }}
+                      >
+                        {dateDivider}
+                      </span>
                     </div>
-                  </div>
-
-                  {/* Timestamp (LINE style: to the right of received message) */}
-                  {msg.role === "assistant" && timeParts && (
-                    <span
-                      className="flex flex-col items-start sm:flex-row sm:items-baseline sm:gap-1 text-[10px] shrink-0 whitespace-nowrap pb-0.5"
-                      style={{ color: "var(--muted)" }}
-                    >
-                      <span>{timeParts.datePart}</span>
-                      <span>{timeParts.timePart}</span>
-                    </span>
                   )}
-                </div>
+                  <div
+                    className={`flex items-end gap-3.5 ${msg.role === "user" ? "justify-end" : "justify-start"} animate-fade-in`}
+                  >
+                    {/* AI Avatar */}
+                    {msg.role === "assistant" && (
+                      <AssistantAvatar />
+                    )}
+
+                    {/* Timestamp (LINE style: to the left of own message) */}
+                    {msg.role === "user" && timeLabel && (
+                      <span
+                        className="text-[10px] shrink-0 whitespace-nowrap pb-0.5"
+                        style={{ color: "var(--muted)" }}
+                      >
+                        {timeLabel}
+                      </span>
+                    )}
+
+                    {/* Message Bubble */}
+                    <div
+                      className={`max-w-[82%] px-4 py-3 shadow-sm border transition-shadow duration-200 hover:shadow-md ${
+                        msg.role === "user"
+                          ? "rounded-2xl rounded-tr-none text-white"
+                          : "rounded-2xl rounded-tl-none"
+                      }`}
+                      style={{
+                        background: msg.role === "user" ? "var(--accent)" : "var(--card)",
+                        borderColor: msg.role === "user" ? "var(--accent)" : "var(--border)",
+                        color: msg.role === "user" ? "#ffffff" : "var(--foreground)",
+                      }}
+                    >
+                      <div className="text-sm leading-relaxed font-medium">
+                        {renderMessageContent(msg.content, msg.role)}
+                      </div>
+                    </div>
+
+                    {/* Timestamp (LINE style: to the right of received message) */}
+                    {msg.role === "assistant" && timeLabel && (
+                      <span
+                        className="text-[10px] shrink-0 whitespace-nowrap pb-0.5"
+                        style={{ color: "var(--muted)" }}
+                      >
+                        {timeLabel}
+                      </span>
+                    )}
+                  </div>
+                </Fragment>
                 );
               })
             )}
