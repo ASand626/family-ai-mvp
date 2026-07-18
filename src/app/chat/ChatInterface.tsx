@@ -1620,8 +1620,8 @@ export default function ChatInterface({
                       onClick={() => handleSwitchSessionMode("counsel")}
                       className="p-4 rounded-xl border text-xs text-left leading-relaxed transition-all duration-300 hover:shadow-md cursor-pointer flex flex-col gap-1.5 active:scale-[0.99]"
                       style={{
-                        background: newSessionMode === "counsel" ? "var(--accent-light)" : "var(--card)",
-                        borderColor: newSessionMode === "counsel" ? "var(--accent)" : "var(--border)",
+                        background: newSessionMode === "counsel" ? "var(--accent-counsel-light)" : "var(--card)",
+                        borderColor: newSessionMode === "counsel" ? "var(--accent-counsel)" : "var(--border)",
                       }}
                     >
                       <span className="text-sm font-semibold" style={{ color: "var(--foreground)" }}>🕯️ 相談モード (傾聴優先)</span>
@@ -1633,8 +1633,8 @@ export default function ChatInterface({
                       onClick={() => handleSwitchSessionMode("solution")}
                       className="p-4 rounded-xl border text-xs text-left leading-relaxed transition-all duration-300 hover:shadow-md cursor-pointer flex flex-col gap-1.5 active:scale-[0.99]"
                       style={{
-                        background: newSessionMode === "solution" ? "var(--accent-light)" : "var(--card)",
-                        borderColor: newSessionMode === "solution" ? "var(--accent)" : "var(--border)",
+                        background: newSessionMode === "solution" ? "var(--accent-solution-light)" : "var(--card)",
+                        borderColor: newSessionMode === "solution" ? "var(--accent-solution)" : "var(--border)",
                       }}
                     >
                       <span className="text-sm font-semibold" style={{ color: "var(--foreground)" }}>🧭 解決モード (課題整理)</span>

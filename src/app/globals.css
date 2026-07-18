@@ -10,6 +10,10 @@
   --card: #FFFBFC;
   --chat-bg-counsel: #F4F1FA;
   --chat-bg-solution: #EEF6F1;
+  --accent-counsel: #8D7EC4;
+  --accent-counsel-light: #EDE7F7;
+  --accent-solution: #5FAE87;
+  --accent-solution-light: #E1F3E8;
 }
 
 @theme inline {
