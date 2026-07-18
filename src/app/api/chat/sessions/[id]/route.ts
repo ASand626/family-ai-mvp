@@ -21,21 +21,27 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
 
     const { id } = await params;
     const body = await req.json();
-    const { title, mode } = body;
+    const { title, mode, is_favorite } = body;
 
-    const updateFields: any = {
-      updated_at: new Date().toISOString(),
-    };
+    const updateFields: any = {};
 
-    if (title !== undefined) updateFields.title = title.trim();
-    if (mode !== undefined) updateFields.mode = mode;
+    if (title !== undefined) {
+      updateFields.title = title.trim();
+      updateFields.updated_at = new Date().toISOString();
+    }
+    if (mode !== undefined) {
+      updateFields.mode = mode;
+      updateFields.updated_at = new Date().toISOString();
+    }
+    // お気に入りの切り替えは会話の更新日時（並び順）に影響させない
+    if (is_favorite !== undefined) updateFields.is_favorite = is_favorite;
 
     const { data, error } = await supabase
       .from("chat_sessions")
       .update(updateFields)
       .eq("id", id)
       .eq("user_id", user.id)
-      .select("id, title, mode, created_at, updated_at")
+      .select("id, title, mode, is_favorite, created_at, updated_at")
       .single();
 
     if (error) {

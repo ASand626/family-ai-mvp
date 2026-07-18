@@ -198,12 +198,25 @@ BEGIN
         SELECT 1 FROM pg_policies 
         WHERE tablename = 'session_actions' AND policyname = 'Users can manage their own session actions'
     ) THEN
-        CREATE POLICY "Users can manage their own session actions" 
+        CREATE POLICY "Users can manage their own session actions"
         ON public.session_actions
-        FOR ALL 
+        FOR ALL
         TO authenticated
         USING (auth.uid() = user_id)
         WITH CHECK (auth.uid() = user_id);
+    END IF;
+END $$;
+
+-- =====================================================================
+-- 8. chat_sessions テーブルに is_favorite カラムを追加（お気に入り機能）
+-- =====================================================================
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'chat_sessions' AND column_name = 'is_favorite'
+    ) THEN
+        ALTER TABLE public.chat_sessions ADD COLUMN is_favorite BOOLEAN NOT NULL DEFAULT false;
     END IF;
 END $$;
 

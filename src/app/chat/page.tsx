@@ -24,7 +24,7 @@ export default async function ChatPage({ searchParams }: PageProps) {
   // 2. Fetch all chat sessions for this user, sorted by updated_at descending (latest first)
   const { data: rawSessions, error: sessionsError } = await supabase
     .from("chat_sessions")
-    .select("id, title, mode, created_at, updated_at, session_memos(id)")
+    .select("id, title, mode, is_favorite, created_at, updated_at, session_memos(id)")
     .eq("user_id", user.id)
     .order("updated_at", { ascending: false });
 
@@ -36,6 +36,7 @@ export default async function ChatPage({ searchParams }: PageProps) {
     id: s.id,
     title: s.title,
     mode: s.mode || "counsel",
+    is_favorite: s.is_favorite || false,
     created_at: s.created_at,
     updated_at: s.updated_at,
     has_memos: Array.isArray(s.session_memos) && s.session_memos.length > 0,

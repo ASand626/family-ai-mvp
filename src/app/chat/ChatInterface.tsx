@@ -9,6 +9,7 @@ interface ChatSession {
   id: string;
   title: string;
   mode: string;
+  is_favorite: boolean;
   created_at: string;
   updated_at: string;
   has_memos: boolean;
@@ -149,6 +150,8 @@ export default function ChatInterface({
   const [isLoading, setIsLoading] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isDeletingSessionId, setIsDeletingSessionId] = useState<string | null>(null);
+  const [historyViewMode, setHistoryViewMode] = useState<"timeline" | "favorites">("timeline");
+  const [isTogglingFavoriteId, setIsTogglingFavoriteId] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -351,6 +354,38 @@ export default function ChatInterface({
       setError(err.message || "モードの変更に失敗しました。");
     } finally {
       setIsChangingMode(false);
+    }
+  };
+
+  const handleToggleFavorite = async (e: React.MouseEvent, session: ChatSession) => {
+    e.stopPropagation();
+    const nextValue = !session.is_favorite;
+    setIsTogglingFavoriteId(session.id);
+    setError(null);
+
+    // Optimistic update
+    setSessions((prev) =>
+      prev.map((s) => (s.id === session.id ? { ...s, is_favorite: nextValue } : s))
+    );
+
+    try {
+      const res = await fetch(`/api/chat/sessions/${session.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_favorite: nextValue }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error);
+      }
+    } catch (err: any) {
+      // Roll back on failure
+      setSessions((prev) =>
+        prev.map((s) => (s.id === session.id ? { ...s, is_favorite: !nextValue } : s))
+      );
+      setError(err.message || "お気に入りの更新に失敗しました。");
+    } finally {
+      setIsTogglingFavoriteId(null);
     }
   };
 
@@ -712,6 +747,7 @@ export default function ChatInterface({
           id: newSessionId,
           title: newSessionTitle || "新しい相談",
           mode: newSessionMode,
+          is_favorite: false,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
           has_memos: false,
@@ -796,6 +832,110 @@ export default function ChatInterface({
     }
   };
 
+  const renderSessionCard = (session: ChatSession) => {
+    const isActive = session.id === activeSessionId;
+    const isDeleting = isDeletingSessionId === session.id;
+    return (
+      <div
+        key={session.id}
+        onClick={() => {
+          setIsSidebarOpen(false);
+          setError(null);
+          router.push(`/chat?session_id=${session.id}`);
+        }}
+        className={`group relative rounded-xl p-3 flex flex-col gap-1.5 cursor-pointer border transition-all duration-200 select-none ${
+          isActive
+            ? "shadow-sm"
+            : "hover:bg-[var(--accent-light)]/50 hover:border-[var(--border)] border-transparent"
+        }`}
+        style={{
+          background: isActive ? "var(--accent-light)" : "transparent",
+          borderColor: isActive ? "var(--border)" : "transparent",
+        }}
+      >
+        {/* Active Indicator Bar */}
+        {isActive && (
+          <div
+            className="absolute left-0 top-3 bottom-3 w-1 rounded-r-lg"
+            style={{ background: "var(--accent)" }}
+          />
+        )}
+
+        {/* Title & Action Icons */}
+        <div className="flex justify-between items-start gap-2 pl-1">
+          <span
+            className={`text-xs font-semibold line-clamp-2 pr-8 transition-colors duration-150 ${
+              isActive ? "text-[var(--accent)]" : "text-[var(--foreground)]"
+            }`}
+          >
+            {session.title}
+          </span>
+          <div className="flex items-center gap-0.5 shrink-0 sm:absolute sm:right-2 sm:top-2">
+            <button
+              onClick={(e) => handleToggleFavorite(e, session)}
+              disabled={isTogglingFavoriteId === session.id}
+              className="p-1 rounded-md transition-all duration-200 cursor-pointer"
+              style={{ color: session.is_favorite ? "var(--accent)" : "#C7BEC2" }}
+              title={session.is_favorite ? "お気に入りから外す" : "お気に入りに追加"}
+            >
+              <svg
+                className="w-3.5 h-3.5"
+                fill={session.is_favorite ? "currentColor" : "none"}
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={1.8}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z"
+                />
+              </svg>
+            </button>
+            <button
+              onClick={(e) => handleDeleteSession(e, session.id)}
+              disabled={isDeleting}
+              className="opacity-0 group-hover:opacity-100 focus:opacity-100 p-1 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all duration-200 cursor-pointer sm:opacity-0 sm:group-hover:opacity-100"
+              title="相談を削除"
+            >
+              {isDeleting ? (
+                <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              ) : (
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Updated Time & Memo indicator */}
+        <div className="flex items-center justify-between pl-1">
+          <span className="text-[10px] font-medium" style={{ color: "var(--muted)" }}>
+            {formatDate(session.updated_at)}
+          </span>
+          {session.has_memos && (
+            <span
+              title="メモあり"
+              className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold flex items-center gap-0.5"
+              style={{ background: "var(--accent-light)", color: "var(--accent)" }}
+            >
+              <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              </svg>
+              メモ
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const favoriteSessions = sessions.filter((s) => s.is_favorite);
+
   // Quick suggestion prompts for empty chats
   const quickPrompts = [
     {
@@ -868,6 +1008,34 @@ export default function ChatInterface({
           </button>
         </div>
 
+        {/* History View Mode Toggle */}
+        {sessions.length > 0 && (
+          <div className="px-4 pt-3 flex gap-1.5">
+            <button
+              onClick={() => setHistoryViewMode("timeline")}
+              className="flex-1 text-center text-[11px] py-1.5 rounded-lg font-semibold border transition-all duration-200 cursor-pointer"
+              style={{
+                background: historyViewMode === "timeline" ? "var(--accent)" : "var(--card)",
+                borderColor: historyViewMode === "timeline" ? "var(--accent)" : "var(--border)",
+                color: historyViewMode === "timeline" ? "#ffffff" : "var(--muted)",
+              }}
+            >
+              🕒 時系列
+            </button>
+            <button
+              onClick={() => setHistoryViewMode("favorites")}
+              className="flex-1 text-center text-[11px] py-1.5 rounded-lg font-semibold border transition-all duration-200 cursor-pointer"
+              style={{
+                background: historyViewMode === "favorites" ? "var(--accent)" : "var(--card)",
+                borderColor: historyViewMode === "favorites" ? "var(--accent)" : "var(--border)",
+                color: historyViewMode === "favorites" ? "#ffffff" : "var(--muted)",
+              }}
+            >
+              ⭐ お気に入り
+            </button>
+          </div>
+        )}
+
         {/* History List */}
         <div className="flex-1 overflow-y-auto px-3 py-4 space-y-1.5">
           {sessions.length === 0 ? (
@@ -875,85 +1043,15 @@ export default function ChatInterface({
               <p>過去の相談はまだありません。</p>
               <p>メッセージを送信すると、ここに自動で履歴が追加されます。</p>
             </div>
+          ) : historyViewMode === "timeline" ? (
+            sessions.map((session) => renderSessionCard(session))
+          ) : favoriteSessions.length === 0 ? (
+            <div className="text-center py-8 px-4 text-xs space-y-2" style={{ color: "var(--muted)" }}>
+              <p>お気に入りの相談はまだありません。</p>
+              <p>星アイコンをタップして登録できます。</p>
+            </div>
           ) : (
-            sessions.map((session) => {
-              const isActive = session.id === activeSessionId;
-              const isDeleting = isDeletingSessionId === session.id;
-              return (
-                <div
-                  key={session.id}
-                  onClick={() => {
-                    setIsSidebarOpen(false);
-                    setError(null);
-                    router.push(`/chat?session_id=${session.id}`);
-                  }}
-                  className={`group relative rounded-xl p-3 flex flex-col gap-1.5 cursor-pointer border transition-all duration-200 select-none ${
-                    isActive
-                      ? "shadow-sm"
-                      : "hover:bg-[var(--accent-light)]/50 hover:border-[var(--border)] border-transparent"
-                  }`}
-                  style={{
-                    background: isActive ? "var(--accent-light)" : "transparent",
-                    borderColor: isActive ? "var(--border)" : "transparent",
-                  }}
-                >
-                  {/* Active Indicator Bar */}
-                  {isActive && (
-                    <div
-                      className="absolute left-0 top-3 bottom-3 w-1 rounded-r-lg"
-                      style={{ background: "var(--accent)" }}
-                    />
-                  )}
-
-                  {/* Title & Delete Icon */}
-                  <div className="flex justify-between items-start gap-2 pl-1">
-                    <span
-                      className={`text-xs font-semibold line-clamp-2 pr-4 transition-colors duration-150 ${
-                        isActive ? "text-[var(--accent)]" : "text-[var(--foreground)]"
-                      }`}
-                    >
-                      {session.title}
-                    </span>
-                    <button
-                      onClick={(e) => handleDeleteSession(e, session.id)}
-                      disabled={isDeleting}
-                      className="opacity-0 group-hover:opacity-100 focus:opacity-100 sm:absolute sm:right-2 sm:top-2 p-1 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all duration-200 cursor-pointer sm:opacity-0 sm:group-hover:opacity-100"
-                      title="相談を削除"
-                    >
-                      {isDeleting ? (
-                        <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                        </svg>
-                      ) : (
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      )}
-                    </button>
-                  </div>
-
-                  {/* Updated Time & Memo indicator */}
-                  <div className="flex items-center justify-between pl-1">
-                    <span className="text-[10px] font-medium" style={{ color: "var(--muted)" }}>
-                      {formatDate(session.updated_at)}
-                    </span>
-                    {session.has_memos && (
-                      <span
-                        title="メモあり"
-                        className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold flex items-center gap-0.5"
-                        style={{ background: "var(--accent-light)", color: "var(--accent)" }}
-                      >
-                        <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                        </svg>
-                        メモ
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })
+            favoriteSessions.map((session) => renderSessionCard(session))
           )}
         </div>
 
