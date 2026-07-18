@@ -828,7 +828,7 @@ export default function ChatInterface({
 
       {/* Sidebar Drawer */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-72 sm:static sm:z-auto sm:flex sm:flex-col shrink-0 border-r transition-transform duration-300 ease-in-out ${
+        className={`fixed inset-y-0 left-0 z-50 w-72 flex flex-col sm:static sm:z-auto shrink-0 border-r transition-transform duration-300 ease-in-out ${
           isSidebarOpen ? "translate-x-0" : "-translate-x-full sm:translate-x-0"
         }`}
         style={{ borderColor: "var(--border)", background: "var(--card)" }}
