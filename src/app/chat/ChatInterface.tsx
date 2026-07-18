@@ -694,6 +694,26 @@ export default function ChatInterface({
     const trimmedMessage = messageText.trim();
     if (!trimmedMessage || isLoading) return;
 
+    // Flush any characters still queued by the previous turn's typewriter
+    // reveal, so that reply isn't left visually truncated once a new
+    // turn starts (its full text is already persisted server-side, but the
+    // on-screen bubble would otherwise stay cut short until reload).
+    if (revealTimerRef.current) {
+      clearInterval(revealTimerRef.current);
+      revealTimerRef.current = null;
+    }
+    if (revealQueueRef.current) {
+      const remaining = revealQueueRef.current;
+      revealQueueRef.current = "";
+      setMessages((prev) => {
+        const last = prev[prev.length - 1];
+        if (!last || last.role !== "assistant") return prev;
+        const updated = [...prev];
+        updated[updated.length - 1] = { ...last, content: last.content + remaining };
+        return updated;
+      });
+    }
+
     setInputValue("");
     setError(null);
     setIsLoading(true);
@@ -797,6 +817,7 @@ export default function ChatInterface({
   const handleNewChat = () => {
     setIsSidebarOpen(false);
     setError(null);
+    setActiveTab("chat");
     router.push("/chat");
   };
 
@@ -893,6 +914,7 @@ export default function ChatInterface({
         onClick={() => {
           setIsSidebarOpen(false);
           setError(null);
+          setActiveTab("chat");
           router.push(`/chat?session_id=${session.id}`);
         }}
         className={`group relative rounded-xl p-3 flex flex-col gap-1.5 cursor-pointer border transition-all duration-200 select-none ${
@@ -1486,7 +1508,7 @@ export default function ChatInterface({
         )}
 
         {/* ── アクションプランタブ ── */}
-        {activeTab === "action" && activeSessionId && (
+        {activeTab === "action" && activeSessionId && activeSession?.mode === "solution" && (
           <main className="flex-1 overflow-y-auto px-5 py-6" style={{ background: "var(--background)" }}>
             <div className="max-w-2xl mx-auto space-y-5 animate-fade-in">
 

@@ -53,18 +53,21 @@ export default async function ChatPage({ searchParams }: PageProps) {
       .select("role, content, created_at")
       .eq("user_id", user.id)
       .eq("session_id", activeSessionId)
-      .order("created_at", { ascending: true }) // oldest first to render sequentially
+      .order("created_at", { ascending: false }) // latest first, reversed to chronological order below
       .limit(50); // Fetch latest 50 messages to render initial viewport quickly
 
     if (historyError) {
       console.error("Fetch conversation history error:", historyError);
     }
 
-    history = (rawHistory || []).map((msg) => ({
-      role: msg.role as "user" | "assistant",
-      content: msg.content,
-      created_at: msg.created_at,
-    }));
+    history = (rawHistory || [])
+      .slice()
+      .reverse() // back to chronological (oldest first) order for rendering
+      .map((msg) => ({
+        role: msg.role as "user" | "assistant",
+        content: msg.content,
+        created_at: msg.created_at,
+      }));
   }
 
   const isAnonymous = user.is_anonymous || false;

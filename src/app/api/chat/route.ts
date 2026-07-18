@@ -78,7 +78,7 @@ export async function POST(request: Request) {
     // the history manually below, so the history query doesn't need to wait
     // for the insert.
     const currentSessionPromise = sessionId
-      ? supabase.from('chat_sessions').select('mode').eq('id', sessionId).maybeSingle()
+      ? supabase.from('chat_sessions').select('mode').eq('id', sessionId).eq('user_id', user.id).maybeSingle()
       : Promise.resolve({ data: null, error: null })
 
     const [userInsertResult, profileResult, membersResult, pastSessionsResult, historyResult, currentSessionResult] = await Promise.all([
@@ -103,7 +103,7 @@ export async function POST(request: Request) {
         .select('role, content, created_at')
         .eq('user_id', user.id)
         .eq('session_id', sessionId)
-        .order('created_at', { ascending: true }) // chronological order
+        .order('created_at', { ascending: false }) // latest first, reversed to chronological order below
         .limit(20),
       currentSessionPromise,
     ])
@@ -133,7 +133,9 @@ ${lines}
 上記は同じ相談者との過去の相談の要約です。関連がある場合は、過去の経緯を踏まえた継続的な伴走として自然に文脈を引き継いでください。ただし、過去の話題を不必要に蒸し返すことは避けてください。`
     }
 
-    const history = historyResult.data || []
+    // Query returned newest-first (to correctly limit to the most recent messages);
+    // reverse back to chronological order for the AI conversation history.
+    const history = (historyResult.data || []).slice().reverse()
 
     // Determine the active mode: existing session overrides the request param
     const activeMode = (currentSessionResult.data?.mode as string) || mode || 'counsel'
@@ -263,6 +265,7 @@ ${formattedProfileString}${pastSummariesBlock}
                 .from('chat_sessions')
                 .update({ title: generatedTitle })
                 .eq('id', sessionId)
+                .eq('user_id', user.id)
             }
           }
 
@@ -271,6 +274,7 @@ ${formattedProfileString}${pastSummariesBlock}
             .from('chat_sessions')
             .update({ updated_at: new Date().toISOString() })
             .eq('id', sessionId)
+            .eq('user_id', user.id)
 
           controller.close()
         } catch (err) {
@@ -313,6 +317,7 @@ ${formattedProfileString}${pastSummariesBlock}
             .from('chat_sessions')
             .update({ summary })
             .eq('id', sessionId)
+            .eq('user_id', user.id)
           if (summaryError) {
             console.error('Failed to save session summary:', summaryError)
           }
