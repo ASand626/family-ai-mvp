@@ -152,7 +152,7 @@ export default async function HomePage() {
       {/* Features */}
       <section className="px-6 py-16 border-t" style={{ borderColor: "var(--border)" }}>
         <div className="max-w-2xl mx-auto">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-10">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-10">
             <FeatureCard
               icon="🤝"
               title="安心して話せる"
@@ -203,14 +203,16 @@ function FeatureCard({
   description: string;
 }) {
   return (
-    <div className="text-center space-y-3">
-      <div className="text-2xl">{icon}</div>
-      <h3 className="text-sm font-semibold" style={{ color: "var(--foreground)" }}>
-        {title}
-      </h3>
-      <p className="text-sm leading-relaxed" style={{ color: "var(--muted)" }}>
-        {description}
-      </p>
+    <div className="flex sm:flex-col items-start sm:items-center gap-3 text-left sm:text-center">
+      <div className="text-2xl shrink-0">{icon}</div>
+      <div className="space-y-1.5 sm:space-y-3">
+        <h3 className="text-sm font-semibold" style={{ color: "var(--foreground)" }}>
+          {title}
+        </h3>
+        <p className="text-sm leading-relaxed" style={{ color: "var(--muted)" }}>
+          {description}
+        </p>
+      </div>
     </div>
   );
 }
