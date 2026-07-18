@@ -900,7 +900,7 @@ export default function ChatInterface({
             <button
               onClick={(e) => handleDeleteSession(e, session.id)}
               disabled={isDeleting}
-              className="opacity-0 group-hover:opacity-100 focus:opacity-100 p-1 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all duration-200 cursor-pointer sm:opacity-0 sm:group-hover:opacity-100"
+              className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 p-1 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all duration-200 cursor-pointer"
               title="相談を削除"
             >
               {isDeleting ? (
